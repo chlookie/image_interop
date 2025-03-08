@@ -33,49 +33,65 @@ impl ScalarPrimitive for f64 {}
 --------------------------------------------------------------------------------
 */
 
-pub mod component {
-	use super::*;
+pub trait ColorComponent {}
 
-	pub trait ColorComponent {}
+#[macro_export]
+macro_rules! declare_color_component {
+	($type:ident) => {
+		paste::paste! {
 
-	#[rustfmt::skip]
-	macro_rules! declare_color_component {
-		($type:ident) => {paste::paste!{
-		
 			#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 			pub struct $type;
-			impl ColorComponent for $type {}
-			
-			pub trait [<Has $type>]<Scalar> {
+			impl $crate::ColorComponent for $type {}
+
+			pub trait [<$type Component>]<Scalar> {
 				fn component(slice: &[Scalar]) -> Scalar;
 				fn component_mut(slice: &mut [Scalar]) -> &mut Scalar;
 			}
-			
+
+			pub trait [<Has $type>]<Scalar> {
+				fn [<$type:snake>](&self) -> Scalar;
+			}
+
+			pub trait [<Has $type Mut>]<Scalar>: [<Has $type>]<Scalar> {
+				fn [<set_ $type:snake>](&mut self, [<$type:snake>]: Scalar);
+			}
+
 			#[allow(dead_code)]
-			impl<'a, P: Pixel> PixelView<'a, P>
+			impl<'a, P: Pixel> [<Has $type>]<P::Scalar> for $crate::PixelView<'a, P>
 			where
-				P::Format: [<Has $type>]<P::Scalar>,
+				P::Format: [<$type Component>]<P::Scalar>,
 			{
-				pub fn [<$type:snake>](&self) -> P::Scalar {
-					<P::Format as [<Has $type>]<P::Scalar>>::component(self.slice)
+				fn [<$type:snake>](&self) -> P::Scalar {
+					<P::Format as [<$type Component>]<P::Scalar>>::component(self.slice)
 				}
 			}
-			
+
 			#[allow(dead_code)]
-			impl<'a, P: Pixel> PixelViewMut<'a, P>
+			impl<'a, P: Pixel> [<Has $type>]<P::Scalar> for $crate::PixelViewMut<'a, P>
 			where
-				P::Format: [<Has $type>]<P::Scalar>,
+				P::Format: [<$type Component>]<P::Scalar>,
 			{
-				pub fn [<$type:snake>](&self) -> P::Scalar {
-					<P::Format as [<Has $type>]<P::Scalar>>::component(self.slice)
-				}
-				
-				pub fn [<set_ $type:snake>](&mut self, [<$type:snake>]: P::Scalar) {
-					*<P::Format as [<Has $type>]<P::Scalar>>::component_mut(self.slice) = [<$type:snake>]
+				fn [<$type:snake>](&self) -> P::Scalar {
+					<P::Format as [<$type Component>]<P::Scalar>>::component(self.slice)
 				}
 			}
-		}};
-	}
+
+			#[allow(dead_code)]
+			impl<'a, P: Pixel> [<Has $type Mut>]<P::Scalar> for $crate::PixelViewMut<'a, P>
+			where
+				P::Format: [<$type Component>]<P::Scalar>,
+			{
+				fn [<set_ $type:snake>](&mut self, [<$type:snake>]: P::Scalar) {
+					*<P::Format as [<$type Component>]<P::Scalar>>::component_mut(self.slice) = [<$type:snake>]
+				}
+			}
+		}
+	};
+}
+
+pub mod components {
+	use super::*;
 
 	declare_color_component!(Alpha);
 	declare_color_component!(Red);
@@ -124,7 +140,10 @@ macro_rules! declare_color_format {
 	(@iter_channels $index:expr, $alias:ident: ) => {};
 
 	(@iter_channels $index:expr, $alias:ident: $channel:ty, $($channels:ty,)*) => {paste::paste!{
-		impl<Scalar: $crate::ScalarPrimitive> $crate::component::[<Has $channel>]<Scalar> for $alias {
+		#[allow(unused_imports)]
+		use $crate::components::*;
+
+		impl<Scalar: $crate::ScalarPrimitive> [<$channel Component>]<Scalar> for $alias {
 			fn component(slice: &[Scalar]) -> Scalar {
 				slice[$index]
 			}
@@ -214,7 +233,7 @@ pub trait PixelToComponents: Pixel {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PixelView<'a, P: Pixel> {
-	slice: &'a [P::Scalar],
+	pub slice: &'a [P::Scalar],
 	_format: PhantomData<P::Format>,
 }
 
@@ -241,7 +260,7 @@ impl<'a, P: Pixel> PixelView<'a, P> {
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct PixelViewMut<'a, P: Pixel> {
-	slice: &'a mut [P::Scalar],
+	pub slice: &'a mut [P::Scalar],
 	_format: PhantomData<P::Format>,
 }
 

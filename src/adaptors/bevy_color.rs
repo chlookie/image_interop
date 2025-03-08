@@ -1,6 +1,6 @@
 use bevy_color::{ColorToComponents, Hsla, Hsva, Hwba, Laba, Lcha, LinearRgba, Oklaba, Oklcha, Srgba, Xyza};
 
-use crate::{Pixel, PixelToComponents, component::*, declare_color_format};
+use crate::{Pixel, PixelToComponents, components::*, declare_color_format};
 
 /*
 --------------------------------------------------------------------------------

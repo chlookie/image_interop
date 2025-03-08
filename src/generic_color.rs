@@ -34,6 +34,7 @@ pub struct Length<const N: usize>;
 --------------------------------------------------------------------------------
 */
 
+/// Const generic CHANNELS required because we don't have const_generic_expressions yet
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GenericColor<const CHANNELS: Channels, Format, Scalar> {
 	pub color: [Scalar; CHANNELS],
