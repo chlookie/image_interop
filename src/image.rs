@@ -83,7 +83,7 @@ impl ImageLayout {
 
 /// A custom image type.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>, Sample = [<P as Pixel>::Scalar; 1]> {
+pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>> {
 	/// The backing buffer of the image, which contains the actual samples.
 	pub(crate) buffer: Buffer,
 
@@ -92,7 +92,6 @@ pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>, Sample = [<P as P
 
 	/// Some PhatomData for our generic types
 	_pixel: PhantomData<P>,
-	_sample: PhantomData<Sample>,
 }
 
 impl<P: Pixel> Image<P, Vec<P::Scalar>> {
@@ -104,7 +103,7 @@ impl<P: Pixel> Image<P, Vec<P::Scalar>> {
 
 		// Sanity check that the layout/buffer dimensions are correct
 		debug_assert!(
-			buffer.len() == Self::expected_buffer_size(layout),
+			buffer.len() == Self::expected_total_samples(layout),
 			"The auto-generated buffer is not the exact size for the given layout, this is a bug."
 		);
 
@@ -112,20 +111,36 @@ impl<P: Pixel> Image<P, Vec<P::Scalar>> {
 			buffer,
 			layout,
 			_pixel: PhantomData,
-			_sample: PhantomData,
 		}
+	}
+
+	pub fn from_bytes<B>(bytes: B, layout: ImageLayout) -> Result<Self>
+	where
+		B: Deref<Target = [u8]>,
+		P::Scalar: FromBytes<Bytes = [u8]>,
+	{
+		let scalar_buffer = bytes
+			.chunks_exact(std::mem::size_of::<P::Scalar>() as usize)
+			.map(TryInto::try_into)
+			.map(Result::unwrap)
+			.map(P::Scalar::from_ne_bytes)
+			.collect::<Vec<P::Scalar>>();
+
+		Self::from_buffer(scalar_buffer, layout)
 	}
 }
 
-impl<Buffer, P: Pixel, const SAMPLE_LEN: usize, S> Image<P, Buffer, [S; SAMPLE_LEN]>
-where
-	Buffer: Deref<Target = [S]>,
-{
+impl<Buffer, P: Pixel> Image<P, Buffer> {
+	pub const CHANNELS: Channels = P::CHANNELS;
+
 	/// Creates a new [`Image`] instance given a backing buffer and an [`ImageLayout`].
-	pub fn from_buffer(buffer: Buffer, layout: ImageLayout) -> Result<Self> {
+	pub fn from_buffer(buffer: Buffer, layout: ImageLayout) -> Result<Self>
+	where
+		Buffer: Deref<Target = [P::Scalar]>,
+	{
 		// Sanity check that the layout/buffer dimensions are correct
 		ensure!(
-			buffer.len() >= Self::expected_buffer_size(layout),
+			buffer.len() >= Self::expected_total_samples(layout),
 			"The given buffer is too small to fit the entire image as dictated by the given layout."
 		);
 
@@ -133,13 +148,8 @@ where
 			buffer,
 			layout,
 			_pixel: PhantomData,
-			_sample: PhantomData,
 		})
 	}
-}
-
-impl<Buffer, P: Pixel, const SAMPLE_LEN: usize, S> Image<P, Buffer, [S; SAMPLE_LEN]> {
-	pub const CHANNELS: Channels = P::CHANNELS;
 
 	pub fn layout(&self) -> ImageLayout {
 		self.layout
@@ -162,13 +172,9 @@ impl<Buffer, P: Pixel, const SAMPLE_LEN: usize, S> Image<P, Buffer, [S; SAMPLE_L
 		pixels as usize * Self::CHANNELS
 	}
 
-	pub fn expected_buffer_size(layout: ImageLayout) -> usize {
-		Self::expected_total_samples(layout) * SAMPLE_LEN
-	}
-
 	fn pixel_range(&self, x: u32, y: u32) -> Range<usize> {
 		let index = self.layout.index(x, y);
-		let samples = Self::CHANNELS as usize * SAMPLE_LEN;
+		let samples = Self::CHANNELS as usize;
 		index..index + samples
 	}
 }
@@ -280,7 +286,7 @@ pub trait ImageViewMut: ImageView {
 	}
 }
 
-impl<Buffer, P> ImageView for Image<P, Buffer, [P::Scalar; 1]>
+impl<Buffer, P> ImageView for Image<P, Buffer>
 where
 	P: Pixel + PixelToComponents,
 	Buffer: Deref<Target = [P::Scalar]>,
@@ -299,38 +305,6 @@ where
 		P::from_slice_unchecked(pixel_slice)
 	}
 }
-
-// macro_rules! impl_image_view_for_byte_buffers {
-// 	($bytes:expr) => {
-impl<Buffer, P> ImageView for Image<P, Buffer, [u8; 2]>
-where
-	P: Pixel + PixelToComponents,
-	Buffer: Deref<Target = [u8]>,
-	P::Scalar: FromBytes<Bytes = [u8]>,
-{
-	type Pixel = P;
-
-	fn dimensions(&self) -> (u32, u32) {
-		(self.width(), self.height())
-	}
-
-	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel {
-		// The channels are contiguous in the image so we can just access them as a slice
-		let range = self.pixel_range(x, y);
-		let pixel_slice = &self.buffer[range];
-
-		self.buffer[range]
-			.chunks_exact(std::mem::size_of::<P::Scalar>() as usize)
-			.map(TryInto::try_into)
-			.map(Result::unwrap)
-			.map(P::Scalar::from_ne_bytes)
-			.collect::<&[_; 2]>();
-	}
-}
-// 	};
-// }
-
-impl_image_view_for_byte_buffers!(2);
 
 impl<Buffer, P> ImageViewMut for Image<P, Buffer>
 where
