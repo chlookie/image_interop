@@ -16,7 +16,7 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 				self.layout.stride_y as usize,
 				self.layout.width as usize,
 				self.layout.stride_x as usize,
-				self.channels() as usize,
+				Self::CHANNELS as usize,
 			)
 		} else {
 			// Iterate over columns first and then rows
@@ -24,7 +24,7 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 				self.layout.stride_x as usize,
 				self.layout.height as usize,
 				self.layout.stride_y as usize,
-				self.channels() as usize,
+				Self::CHANNELS as usize,
 			)
 		}
 	}

@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Ok, Result, ensure};
+use num_traits::FromBytes;
 
 use crate::{Channels, ImageIter, Pixel, PixelToComponents};
 
@@ -29,7 +30,7 @@ pub struct ImageLayout {
 }
 
 impl ImageLayout {
-	pub fn row_major_packed(channels: usize, width: u32, height: u32) -> Self {
+	pub fn row_major_packed(channels: Channels, width: u32, height: u32) -> Self {
 		ImageLayout {
 			width,
 			height,
@@ -38,7 +39,7 @@ impl ImageLayout {
 		}
 	}
 
-	pub fn column_major_packed(channels: usize, width: u32, height: u32) -> Self {
+	pub fn column_major_packed(channels: Channels, width: u32, height: u32) -> Self {
 		ImageLayout {
 			width,
 			height,
@@ -55,18 +56,18 @@ impl ImageLayout {
 		self.stride_x > self.stride_y
 	}
 
-	pub fn image_buffer_length(&self, channels: usize) -> Option<usize> {
+	fn total_pixels(&self) -> Option<u32> {
 		// Since we are using strides, can't just do width*height
-		let size_x = self.stride_x.checked_mul(self.width)?;
-		let size_y = self.stride_y.checked_mul(self.height)?;
-
-		// So take the biggest one instead (i.e. the major dimension)
-		let size = size_x.max(size_y) as usize;
-		size.checked_mul(channels)
-	}
-
-	pub fn image_buffer_fits(&self, channels: usize, length: usize) -> bool {
-		self.image_buffer_length(channels) == Some(length)
+		if self.is_row_major() {
+			// stride_y > stride_x
+			self.stride_y.checked_mul(self.height)
+		} else if self.is_column_major() {
+			// stride_x > stride_y
+			self.stride_x.checked_mul(self.width)
+		} else {
+			// Layout is malformed
+			None
+		}
 	}
 
 	pub fn index(&self, x: u32, y: u32) -> usize {
@@ -80,21 +81,22 @@ impl ImageLayout {
 --------------------------------------------------------------------------------
 */
 
-/// A custom image type compatible with/based on the [image] crate.
+/// A custom image type.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>> {
+pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>, Sample = [<P as Pixel>::Scalar; 1]> {
 	/// The backing buffer of the image, which contains the actual samples.
 	pub(crate) buffer: Buffer,
 
 	/// The layout of the image, which dictates the size of the image and how to locate pixels in the buffer.
 	pub(crate) layout: ImageLayout,
 
-	/// Some PhatomData for the Pixel type.
+	/// Some PhatomData for our generic types
 	_pixel: PhantomData<P>,
+	_sample: PhantomData<Sample>,
 }
 
 impl<P: Pixel> Image<P, Vec<P::Scalar>> {
-	/// Creates a new [`Image`] with a simple empty contiguous [`Vec`] as a buffer.
+	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
 	pub fn new(width: u32, height: u32) -> Self {
 		let buffer = vec![P::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
 
@@ -102,25 +104,42 @@ impl<P: Pixel> Image<P, Vec<P::Scalar>> {
 
 		// Sanity check that the layout/buffer dimensions are correct
 		debug_assert!(
-			layout.image_buffer_fits(Self::CHANNELS, buffer.len()),
-			"Buffer has wrong size for the given layout"
+			buffer.len() == Self::expected_buffer_size(layout),
+			"The auto-generated buffer is not the exact size for the given layout, this is a bug."
 		);
 
 		Self {
 			buffer,
 			layout,
 			_pixel: PhantomData,
+			_sample: PhantomData,
 		}
 	}
 }
 
-impl<Buffer, P: Pixel> Image<P, Buffer> {
-	pub const CHANNELS: Channels = P::CHANNELS;
+impl<Buffer, P: Pixel, const SAMPLE_LEN: usize, S> Image<P, Buffer, [S; SAMPLE_LEN]>
+where
+	Buffer: Deref<Target = [S]>,
+{
+	/// Creates a new [`Image`] instance given a backing buffer and an [`ImageLayout`].
+	pub fn from_buffer(buffer: Buffer, layout: ImageLayout) -> Result<Self> {
+		// Sanity check that the layout/buffer dimensions are correct
+		ensure!(
+			buffer.len() >= Self::expected_buffer_size(layout),
+			"The given buffer is too small to fit the entire image as dictated by the given layout."
+		);
 
-	/// Returns the number of channels the color format of the image has.
-	pub const fn channels(&self) -> Channels {
-		Self::CHANNELS
+		Ok(Self {
+			buffer,
+			layout,
+			_pixel: PhantomData,
+			_sample: PhantomData,
+		})
 	}
+}
+
+impl<Buffer, P: Pixel, const SAMPLE_LEN: usize, S> Image<P, Buffer, [S; SAMPLE_LEN]> {
+	pub const CHANNELS: Channels = P::CHANNELS;
 
 	pub fn layout(&self) -> ImageLayout {
 		self.layout
@@ -134,32 +153,31 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 		self.buffer
 	}
 
+	pub fn total_samples(&self) -> usize {
+		Self::expected_total_samples(self.layout)
+	}
+
+	pub fn expected_total_samples(layout: ImageLayout) -> usize {
+		let pixels = layout.total_pixels().unwrap();
+		pixels as usize * Self::CHANNELS
+	}
+
+	pub fn expected_buffer_size(layout: ImageLayout) -> usize {
+		Self::expected_total_samples(layout) * SAMPLE_LEN
+	}
+
 	fn pixel_range(&self, x: u32, y: u32) -> Range<usize> {
 		let index = self.layout.index(x, y);
-		let channels = self.channels() as usize;
-		index..index + channels
+		let samples = Self::CHANNELS as usize * SAMPLE_LEN;
+		index..index + samples
 	}
 }
 
 impl<Buffer, P> Image<P, Buffer>
 where
 	P: Pixel,
-	Buffer: DerefMut<Target = [P::Scalar]>,
+	Self: ImageIter<Pixel = P> + ImageView,
 {
-	/// Creates a new [`Image`] instance given a backing buffer and an [`ImageLayout`].
-	pub fn from_buffer(buffer: Buffer, layout: ImageLayout) -> Result<Self> {
-		ensure!(
-			layout.image_buffer_fits(Self::CHANNELS, buffer.len()),
-			"The given buffer is not of the right size for the given layout!"
-		);
-
-		Ok(Self {
-			buffer,
-			layout,
-			_pixel: PhantomData,
-		})
-	}
-
 	pub fn to_packed(self) -> Image<P, Vec<<P as Pixel>::Scalar>>
 	where
 		P: PixelToComponents,
@@ -185,6 +203,11 @@ pub trait ImageView {
 	/// The type of pixel.
 	type Pixel: Pixel;
 
+	/// Returns the number of channels the color format of the image has.
+	fn channels(&self) -> Channels {
+		Self::Pixel::CHANNELS
+	}
+
 	/// The width and height of this image.
 	fn dimensions(&self) -> (u32, u32);
 
@@ -205,7 +228,14 @@ pub trait ImageView {
 	}
 
 	/// Returns the pixel located at (x, y). Indexed from top left.
-	fn get_pixel(&self, x: u32, y: u32) -> Result<Self::Pixel>;
+	fn get_pixel(&self, x: u32, y: u32) -> Result<Self::Pixel> {
+		ensure!(
+			x < self.width() && y < self.height(),
+			"Pixel x y coordinates out of bounds"
+		);
+
+		Ok(self.get_pixel_unchecked(x, y))
+	}
 
 	/// Returns the pixel located at (x, y). Indexed from top left.
 	///
@@ -250,7 +280,7 @@ pub trait ImageViewMut: ImageView {
 	}
 }
 
-impl<Buffer, P> ImageView for Image<P, Buffer>
+impl<Buffer, P> ImageView for Image<P, Buffer, [P::Scalar; 1]>
 where
 	P: Pixel + PixelToComponents,
 	Buffer: Deref<Target = [P::Scalar]>,
@@ -261,14 +291,6 @@ where
 		(self.width(), self.height())
 	}
 
-	fn get_pixel(&self, x: u32, y: u32) -> Result<Self::Pixel> {
-		// The channels are contiguous in the image so we can just access them as a slice
-		let range = self.pixel_range(x, y);
-		let pixel_slice = &self.buffer.get(range).context("Pixel x y coordinates out of bounds")?;
-
-		Ok(P::from_slice_unchecked(pixel_slice))
-	}
-
 	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel {
 		// The channels are contiguous in the image so we can just access them as a slice
 		let range = self.pixel_range(x, y);
@@ -277,6 +299,38 @@ where
 		P::from_slice_unchecked(pixel_slice)
 	}
 }
+
+// macro_rules! impl_image_view_for_byte_buffers {
+// 	($bytes:expr) => {
+impl<Buffer, P> ImageView for Image<P, Buffer, [u8; 2]>
+where
+	P: Pixel + PixelToComponents,
+	Buffer: Deref<Target = [u8]>,
+	P::Scalar: FromBytes<Bytes = [u8]>,
+{
+	type Pixel = P;
+
+	fn dimensions(&self) -> (u32, u32) {
+		(self.width(), self.height())
+	}
+
+	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel {
+		// The channels are contiguous in the image so we can just access them as a slice
+		let range = self.pixel_range(x, y);
+		let pixel_slice = &self.buffer[range];
+
+		self.buffer[range]
+			.chunks_exact(std::mem::size_of::<P::Scalar>() as usize)
+			.map(TryInto::try_into)
+			.map(Result::unwrap)
+			.map(P::Scalar::from_ne_bytes)
+			.collect::<&[_; 2]>();
+	}
+}
+// 	};
+// }
+
+impl_image_view_for_byte_buffers!(2);
 
 impl<Buffer, P> ImageViewMut for Image<P, Buffer>
 where
