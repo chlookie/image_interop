@@ -27,6 +27,9 @@ impl ScalarPrimitive for isize {}
 impl ScalarPrimitive for f32 {}
 impl ScalarPrimitive for f64 {}
 
+#[cfg(feature = "f16")]
+impl ScalarPrimitive for half::f16 {}
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
