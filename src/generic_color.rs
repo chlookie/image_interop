@@ -8,11 +8,12 @@ use crate::{Channels, ColorFormat, Pixel, PixelToComponents, ScalarPrimitive};
 --------------------------------------------------------------------------------
 */
 
-trait TupleLength<T> {
+pub trait TupleLength<T> {
 	type Tuple;
 }
 
-struct Length<const N: usize>;
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Length<const N: usize>;
 
 #[rustfmt::skip] impl<T> TupleLength<T> for Length<1>  {type Tuple = (T,);}
 #[rustfmt::skip] impl<T> TupleLength<T> for Length<2>  {type Tuple = (T, T);}
@@ -34,12 +35,12 @@ struct Length<const N: usize>;
 */
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct GenericPixel<Format, Scalar, const CHANNELS: Channels> {
+pub struct GenericColor<const CHANNELS: Channels, Format, Scalar> {
 	pub color: [Scalar; CHANNELS],
 	_format: PhantomData<Format>,
 }
 
-impl<Format, Scalar, const CHANNELS: Channels> Default for GenericPixel<Format, Scalar, { CHANNELS }>
+impl<const CHANNELS: Channels, Format, Scalar> Default for GenericColor<{ CHANNELS }, Format, Scalar>
 where
 	Scalar: Default + Copy,
 {
@@ -51,7 +52,7 @@ where
 	}
 }
 
-impl<Format, Scalar, const CHANNELS: Channels> Pixel for GenericPixel<Format, Scalar, { CHANNELS }>
+impl<const CHANNELS: Channels, Format, Scalar> Pixel for GenericColor<{ CHANNELS }, Format, Scalar>
 where
 	Scalar: ScalarPrimitive,
 	Format: Copy + ColorFormat<Scalar>,
@@ -60,7 +61,7 @@ where
 	type Format = Format;
 }
 
-impl<Format, Scalar, const CHANNELS: Channels> PixelToComponents for GenericPixel<Format, Scalar, { CHANNELS }>
+impl<const CHANNELS: Channels, Format, Scalar> PixelToComponents for GenericColor<{ CHANNELS }, Format, Scalar>
 where
 	Scalar: ScalarPrimitive,
 	Format: Copy + ColorFormat<Scalar>,

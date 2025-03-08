@@ -15,4 +15,7 @@ pub use pixel::*;
 pub mod adaptors;
 pub use adaptors::*;
 
-// TODO: remove image-rs and use zune-image instead
+pub mod generic_color;
+pub use generic_color::*;
+
+// TODO: Add adaptors for zune-image and image-rs

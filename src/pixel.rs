@@ -40,7 +40,7 @@ pub mod component {
 
 	#[rustfmt::skip]
 	macro_rules! declare_color_component {
-		($type:ident, $name:ident) => {paste::paste!{
+		($type:ident) => {paste::paste!{
 		
 			#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 			pub struct $type;
@@ -56,7 +56,7 @@ pub mod component {
 			where
 				P::Format: [<Has $type>]<P::Scalar>,
 			{
-				pub fn $name(&self) -> P::Scalar {
+				pub fn [<$type:snake>](&self) -> P::Scalar {
 					<P::Format as [<Has $type>]<P::Scalar>>::component(self.slice)
 				}
 			}
@@ -66,33 +66,33 @@ pub mod component {
 			where
 				P::Format: [<Has $type>]<P::Scalar>,
 			{
-				pub fn $name(&self) -> P::Scalar {
+				pub fn [<$type:snake>](&self) -> P::Scalar {
 					<P::Format as [<Has $type>]<P::Scalar>>::component(self.slice)
 				}
 				
-				pub fn [<set_ $name>](&mut self, $name: P::Scalar) {
-					*<P::Format as [<Has $type>]<P::Scalar>>::component_mut(self.slice) = $name
+				pub fn [<set_ $type:snake>](&mut self, [<$type:snake>]: P::Scalar) {
+					*<P::Format as [<Has $type>]<P::Scalar>>::component_mut(self.slice) = [<$type:snake>]
 				}
 			}
 		}};
 	}
 
-	declare_color_component!(Alpha, alpha);
-	declare_color_component!(Red, red);
-	declare_color_component!(Green, green);
-	declare_color_component!(Blue, blue);
-	declare_color_component!(Hue, hue);
-	declare_color_component!(Whiteness, whiteness);
-	declare_color_component!(Blackness, blackness);
-	declare_color_component!(Saturation, saturation);
-	declare_color_component!(Value, value);
-	declare_color_component!(Lightness, lightness);
-	declare_color_component!(A, a);
-	declare_color_component!(B, b);
-	declare_color_component!(Chroma, chroma);
-	declare_color_component!(X, x);
-	declare_color_component!(Y, y);
-	declare_color_component!(Z, z);
+	declare_color_component!(Alpha);
+	declare_color_component!(Red);
+	declare_color_component!(Green);
+	declare_color_component!(Blue);
+	declare_color_component!(Hue);
+	declare_color_component!(Whiteness);
+	declare_color_component!(Blackness);
+	declare_color_component!(Saturation);
+	declare_color_component!(Value);
+	declare_color_component!(Lightness);
+	declare_color_component!(A);
+	declare_color_component!(B);
+	declare_color_component!(Chroma);
+	declare_color_component!(X);
+	declare_color_component!(Y);
+	declare_color_component!(Z);
 }
 
 /*
