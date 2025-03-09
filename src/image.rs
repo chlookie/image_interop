@@ -6,7 +6,9 @@ use std::{
 use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
-use crate::{Channels, ImageIter, Pixel, PixelToComponents};
+use crate::{
+	Channels, ImageIter, ImageIterMut, ImageView, ImageViewMut, Pixel, PixelToComponents, PixelView, PixelViewMut,
+};
 
 /*
 --------------------------------------------------------------------------------
@@ -54,6 +56,30 @@ impl ImageLayout {
 
 	pub fn is_column_major(&self) -> bool {
 		self.stride_x > self.stride_y
+	}
+
+	pub fn major_stride(&self) -> u32 {
+		if self.is_row_major() {
+			self.stride_y
+		} else {
+			self.stride_x
+		}
+	}
+
+	pub fn minor_stride(&self) -> u32 {
+		if self.is_row_major() {
+			self.stride_x
+		} else {
+			self.stride_y
+		}
+	}
+
+	pub fn major_sidelength(&self) -> u32 {
+		if self.is_row_major() { self.height } else { self.width }
+	}
+
+	pub fn minor_sidelength(&self) -> u32 {
+		if self.is_row_major() { self.width } else { self.height }
 	}
 
 	fn total_pixels(&self) -> Option<u32> {
@@ -204,88 +230,6 @@ where
 --------------------------------------------------------------------------------
 */
 
-/// Trait to inspect an image.
-pub trait ImageView {
-	/// The type of pixel.
-	type Pixel: Pixel;
-
-	/// Returns the number of channels the color format of the image has.
-	fn channels(&self) -> Channels {
-		Self::Pixel::CHANNELS
-	}
-
-	/// The width and height of this image.
-	fn dimensions(&self) -> (u32, u32);
-
-	/// The width of this image.
-	fn width(&self) -> u32 {
-		self.dimensions().0
-	}
-
-	/// The height of this image.
-	fn height(&self) -> u32 {
-		self.dimensions().1
-	}
-
-	/// Returns true if this x, y coordinate is contained inside the image.
-	fn in_bounds(&self, x: u32, y: u32) -> bool {
-		let (width, height) = self.dimensions();
-		x < width && y < height
-	}
-
-	/// Returns the pixel located at (x, y). Indexed from top left.
-	fn get_pixel(&self, x: u32, y: u32) -> Result<Self::Pixel> {
-		ensure!(
-			x < self.width() && y < self.height(),
-			"Pixel x y coordinates out of bounds"
-		);
-
-		Ok(self.get_pixel_unchecked(x, y))
-	}
-
-	/// Returns the pixel located at (x, y). Indexed from top left.
-	///
-	/// # Panics
-	///
-	/// Panics if `(x, y)` is out of bounds.
-	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel;
-}
-
-/// A trait for manipulating images.
-pub trait ImageViewMut: ImageView {
-	/// Put a pixel at location (x, y). Indexed from top left.
-	fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) -> Result<()>;
-
-	/// Put a pixel at location (x, y). Indexed from top left.
-	///
-	/// # Panics
-	///
-	/// Panics if `(x, y)` is out of bounds.
-	fn put_pixel_unchecked(&mut self, x: u32, y: u32, pixel: Self::Pixel);
-
-	/// Copies all of the pixels from another image into this image.
-	///
-	/// Both images have to have matching sizes.
-	fn copy_from<O>(&mut self, other: &O, x: u32, y: u32) -> Result<()>
-	where
-		O: ImageView<Pixel = Self::Pixel>,
-	{
-		// Do bounds checking here so we can use the non-bounds-checking functions to copy pixels.
-		ensure!(
-			self.width() == other.width() && self.height() == other.height(),
-			"Image sizes do not match"
-		);
-
-		for k in 0..self.height() {
-			for i in 0..self.width() {
-				let p = other.get_pixel_unchecked(i, k);
-				self.put_pixel_unchecked(i + x, k + y, p);
-			}
-		}
-		Ok(())
-	}
-}
-
 impl<Buffer, P> ImageView for Image<P, Buffer>
 where
 	P: Pixel + PixelToComponents,
@@ -328,5 +272,243 @@ where
 		let pixel_slice = &mut self.buffer[range];
 
 		pixel_slice.copy_from_slice(pixel.to_array().as_ref());
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+impl<P, Buffer> ImageIter for Image<P, Buffer>
+where
+	P: Pixel,
+	Buffer: Deref<Target = [P::Scalar]>,
+{
+	type Pixel = P;
+
+	/// Returns an iterator over the pixels of the image.
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<P>> {
+		let layout = self.layout;
+
+		self.buffer
+			.chunks_exact(layout.major_stride() as usize)
+			.flat_map(move |padded_chunk| {
+				let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+
+				chunk
+					.chunks_exact(layout.minor_stride() as usize)
+					.map(move |padded_pixel| {
+						let slice = &padded_pixel[..Self::CHANNELS];
+						P::as_view_unchecked(slice)
+					})
+			})
+	}
+
+	/// Returns an iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<P>)> {
+		let layout = self.layout;
+
+		self.buffer
+			.chunks_exact(layout.major_stride() as usize)
+			.enumerate()
+			.flat_map(move |(outer_index, padded_chunk)| {
+				let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+
+				chunk.chunks_exact(layout.minor_stride() as usize).enumerate().map(
+					move |(inner_index, padded_pixel)| {
+						let (x, y) = if layout.is_row_major() {
+							(inner_index, outer_index)
+						} else {
+							(outer_index, inner_index)
+						};
+						let slice = &padded_pixel[..Self::CHANNELS];
+						let pixel = P::as_view_unchecked(slice);
+
+						(x as u32, y as u32, pixel)
+					},
+				)
+			})
+	}
+}
+
+impl<P, Buffer> ImageIterMut for Image<P, Buffer>
+where
+	P: Pixel,
+	Buffer: DerefMut<Target = [P::Scalar]>,
+{
+	type Pixel = P;
+
+	/// Returns an iterator over the mutable pixels of the image, usable with `rayon`.
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<P>> {
+		let layout = self.layout;
+
+		self.buffer
+			.chunks_exact_mut(layout.major_stride() as usize)
+			.flat_map(move |padded_chunk| {
+				let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+
+				chunk
+					.chunks_exact_mut(layout.minor_stride() as usize)
+					.map(move |padded_pixel| {
+						let slice = &mut padded_pixel[..Self::CHANNELS];
+						P::as_view_mut_unchecked(slice)
+					})
+			})
+	}
+
+	/// Returns an iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<P>)> {
+		let layout = self.layout;
+
+		self.buffer
+			.chunks_exact_mut(layout.major_stride() as usize)
+			.enumerate()
+			.flat_map(move |(outer_index, padded_chunk)| {
+				let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+
+				chunk.chunks_exact_mut(layout.minor_stride() as usize).enumerate().map(
+					move |(inner_index, padded_pixel)| {
+						let (x, y) = if layout.is_row_major() {
+							(inner_index, outer_index)
+						} else {
+							(outer_index, inner_index)
+						};
+						let slice = &mut padded_pixel[..Self::CHANNELS];
+						let pixel = P::as_view_mut_unchecked(slice);
+
+						(x as u32, y as u32, pixel)
+					},
+				)
+			})
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+#[cfg(feature = "rayon")]
+mod par_iter {
+	use rayon::{
+		iter::{IndexedParallelIterator, ParallelIterator},
+		slice::{ParallelSlice, ParallelSliceMut},
+	};
+
+	use crate::{ImageParallelIter, ImageParallelIterMut};
+
+	use super::*;
+
+	impl<P, Buffer> ImageParallelIter for Image<P, Buffer>
+	where
+		P: Pixel + Sync,
+		P::Scalar: Sync,
+		P::Format: Sync + Send,
+		Buffer: Deref<Target = [P::Scalar]> + Sync,
+	{
+		type Pixel = P;
+
+		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
+		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<P>> {
+			let layout = self.layout;
+
+			self.buffer
+				.par_chunks_exact(layout.major_stride() as usize)
+				.flat_map(move |padded_chunk| {
+					let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+
+					chunk
+						.par_chunks_exact(layout.minor_stride() as usize)
+						.map(move |padded_pixel| {
+							let slice = &padded_pixel[..Self::CHANNELS];
+							P::as_view_unchecked(slice)
+						})
+				})
+		}
+
+		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
+		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<P>)> {
+			let layout = self.layout;
+
+			self.buffer
+				.par_chunks_exact(layout.major_stride() as usize)
+				.enumerate()
+				.flat_map(move |(outer_index, padded_chunk)| {
+					let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+
+					chunk.par_chunks_exact(layout.minor_stride() as usize).enumerate().map(
+						move |(inner_index, padded_pixel)| {
+							let (x, y) = if layout.is_row_major() {
+								(inner_index, outer_index)
+							} else {
+								(outer_index, inner_index)
+							};
+							let slice = &padded_pixel[..Self::CHANNELS];
+							let pixel = P::as_view_unchecked(slice);
+
+							(x as u32, y as u32, pixel)
+						},
+					)
+				})
+		}
+	}
+
+	#[cfg(feature = "rayon")]
+	impl<P, Buffer> ImageParallelIterMut for Image<P, Buffer>
+	where
+		P: Pixel + Send + Sync,
+		P::Scalar: Send + Sync,
+		P::Format: Send + Sync,
+		Buffer: DerefMut<Target = [P::Scalar]> + Send + Sync,
+	{
+		type Pixel = P;
+
+		/// Returns a parallel iterator over the mutable pixels of the image, usable with `rayon`.
+		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<P>> {
+			let layout = self.layout;
+
+			self.buffer
+				.par_chunks_exact_mut(layout.major_stride() as usize)
+				.flat_map(move |padded_chunk| {
+					let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+
+					chunk
+						.par_chunks_exact_mut(layout.minor_stride() as usize)
+						.map(move |padded_pixel| {
+							let slice = &mut padded_pixel[..Self::CHANNELS];
+							P::as_view_mut_unchecked(slice)
+						})
+				})
+		}
+
+		/// Returns a parallel iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
+		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<P>)> {
+			let layout = self.layout;
+
+			self.buffer
+				.par_chunks_exact_mut(layout.major_stride() as usize)
+				.enumerate()
+				.flat_map(move |(outer_index, padded_chunk)| {
+					let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+
+					chunk
+						.par_chunks_exact_mut(layout.minor_stride() as usize)
+						.enumerate()
+						.map(move |(inner_index, padded_pixel)| {
+							let (x, y) = if layout.is_row_major() {
+								(inner_index, outer_index)
+							} else {
+								(outer_index, inner_index)
+							};
+							let slice = &mut padded_pixel[..Self::CHANNELS];
+							let pixel = P::as_view_mut_unchecked(slice);
+
+							(x as u32, y as u32, pixel)
+						})
+				})
+		}
 	}
 }
