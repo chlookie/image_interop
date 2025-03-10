@@ -47,7 +47,7 @@ impl ImageLayout {
 		Self::new(width, height, stride_x, stride_y)
 	}
 
-	pub fn incomplete_form(&self) -> ImageForm {
+	pub fn form(&self) -> ImageForm {
 		if self.width == 0 || self.height == 0 {
 			ImageForm::Malformed
 		} else if self.width == 1 && self.height == 1 {
@@ -61,56 +61,79 @@ impl ImageLayout {
 		}
 	}
 
-	// pub fn major_stride(&self) -> usize {
-	// 	if self.form().is_row_major() {
-	// 		self.stride_y
-	// 	} else {
-	// 		self.stride_x
-	// 	}
-	// }
+	pub fn is_single_pixel(&self) -> bool {
+		self.form().is_single_pixel()
+	}
 
-	// pub fn minor_stride(&self) -> usize {
-	// 	if self.form().is_row_major() {
-	// 		self.stride_x
-	// 	} else {
-	// 		self.stride_y
-	// 	}
-	// }
+	pub fn is_row_major(&self) -> bool {
+		self.form().is_row_major()
+	}
 
-	// pub fn major_sidelength(&self) -> u32 {
-	// 	if self.form().is_row_major() { self.height } else { self.width }
-	// }
+	pub fn is_column_major(&self) -> bool {
+		self.form().is_column_major()
+	}
 
-	// pub fn minor_sidelength(&self) -> u32 {
-	// 	if self.form().is_row_major() { self.width } else { self.height }
-	// }
+	pub fn major_stride(&self) -> Option<usize> {
+		if self.is_row_major() {
+			Some(self.stride_y)
+		} else if self.is_column_major() {
+			Some(self.stride_x)
+		} else {
+			None
+		}
+	}
 
-	pub fn total_pixels(&self) -> u32 {
+	pub fn minor_stride(&self) -> Option<usize> {
+		if self.is_row_major() {
+			Some(self.stride_x)
+		} else if self.is_column_major() {
+			Some(self.stride_y)
+		} else {
+			None
+		}
+	}
+
+	pub fn major_sidelength(&self) -> Option<u32> {
+		if self.is_row_major() || self.is_single_pixel() {
+			Some(self.height)
+		} else if self.is_column_major() {
+			Some(self.width)
+		} else {
+			None
+		}
+	}
+
+	pub fn minor_sidelength(&self) -> Option<u32> {
+		if self.is_row_major() || self.is_single_pixel() {
+			Some(self.width)
+		} else if self.is_column_major() {
+			Some(self.height)
+		} else {
+			None
+		}
+	}
+
+	pub fn total_visible_pixels(&self) -> u32 {
 		self.width * self.height
 	}
 
-	pub fn max_samples(&self) -> usize {
-		todo!()
-		// // Since we are using strides, can't just do width*height
-		// if self.is_row_major() {
-		// 	// stride_y > stride_x
-		// 	self.stride_y.checked_mul(self.height)
-		// } else if self.is_column_major() {
-		// 	// stride_x > stride_y
-		// 	self.stride_x.checked_mul(self.width)
-		// } else {
-		// 	// Layout is malformed
-		// 	None
-		// }
+	pub fn total_padded_pixels(&self) -> Option<usize> {
+		// Since we are using strides, can't just do width*height
+		if self.is_single_pixel() {
+			Some(1)
+		} else if self.is_row_major() {
+			// stride_y > stride_x
+			Some(self.stride_y * self.height as usize)
+		} else if self.is_column_major() {
+			// stride_x > stride_y
+			Some(self.stride_x * self.width as usize)
+		} else {
+			// Layout is malformed
+			None
+		}
 	}
 
 	pub fn index(&self, x: u32, y: u32) -> usize {
 		x as usize * self.stride_x + y as usize * self.stride_y
 	}
 }
-
-/*
---------------------------------------------------------------------------------
-||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
---------------------------------------------------------------------------------
-*/

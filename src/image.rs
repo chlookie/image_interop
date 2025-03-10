@@ -146,7 +146,7 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 	}
 
 	pub fn expected_total_samples(layout: ImageLayout) -> usize {
-		layout.max_samples() * Self::CHANNELS
+		layout.total_padded_pixels() * Self::CHANNELS
 	}
 
 	fn pixel_range(&self, x: u32, y: u32) -> Range<usize> {
