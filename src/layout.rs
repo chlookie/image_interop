@@ -47,45 +47,33 @@ impl ImageLayout {
 		Self::new(width, height, stride_x, stride_y)
 	}
 
-	pub fn form(&self) -> Option<ImageForm> {
-		todo!()
-	}
+	// pub fn form(&self) -> ImageForm {
+	// 	// if
+	// }
 
-	pub fn is_row_major(&self) -> bool {
-		todo!()
-	}
+	// pub fn major_stride(&self) -> usize {
+	// 	if self.form().is_row_major() {
+	// 		self.stride_y
+	// 	} else {
+	// 		self.stride_x
+	// 	}
+	// }
 
-	pub fn is_column_major(&self) -> bool {
-		todo!()
-	}
+	// pub fn minor_stride(&self) -> usize {
+	// 	if self.form().is_row_major() {
+	// 		self.stride_x
+	// 	} else {
+	// 		self.stride_y
+	// 	}
+	// }
 
-	pub fn is_packed(&self) -> bool {
-		todo!()
-	}
+	// pub fn major_sidelength(&self) -> u32 {
+	// 	if self.form().is_row_major() { self.height } else { self.width }
+	// }
 
-	pub fn major_stride(&self) -> usize {
-		if self.is_row_major() {
-			self.stride_y
-		} else {
-			self.stride_x
-		}
-	}
-
-	pub fn minor_stride(&self) -> usize {
-		if self.is_row_major() {
-			self.stride_x
-		} else {
-			self.stride_y
-		}
-	}
-
-	pub fn major_sidelength(&self) -> u32 {
-		if self.is_row_major() { self.height } else { self.width }
-	}
-
-	pub fn minor_sidelength(&self) -> u32 {
-		if self.is_row_major() { self.width } else { self.height }
-	}
+	// pub fn minor_sidelength(&self) -> u32 {
+	// 	if self.form().is_row_major() { self.width } else { self.height }
+	// }
 
 	pub fn total_pixels(&self) -> u32 {
 		self.width * self.height
@@ -119,23 +107,26 @@ impl ImageLayout {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ImageForm {
+	/// The image has width == 0 and/or height == 0.
+	Empty,
+
 	/// The image has width > 0 and height > 0.
 	NonEmpty,
 
 	/// The image doesn't have aliased pixel.
 	/// In other words, for a given pixel in the buffer, there is at most one coordinate pair that maps to the pixel.
-	/// Implies [`ImageForm::WellFormed`].
+	/// Implies [`ImageForm::NonEmpty`].
 	Unaliased,
 
 	/// The image's buffer is fully packed and utilized by the bounds of the image.
 	/// Implies [`ImageForm::Unaliased`].
 	Packed,
 
-	/// The images bounds are width = 1 and height = 1.
+	/// The image has width = 1 and height = 1.
 	/// Implies [`ImageForm::Unaliased`].
 	SinglePixel,
 
-	/// The images bounds are width = 1 and height = 1, and the image is packed.
+	/// The image has width = 1 and height = 1, and the image is packed.
 	/// Implies [`ImageForm::SinglePixel`] and [`ImageForm::Packed`].
 	SinglePixelPacked,
 
@@ -147,37 +138,50 @@ pub enum ImageForm {
 	/// Implies [`ImageForm::Unaliased`].
 	ColumnMajor,
 
-	/// The image is in crowolumn-major form and packed.
-	/// Implies [`ImageForm::RowMajor`].and [`ImageForm::Packed`].
+	/// The image is in row-major form and packed.
+	/// Implies [`ImageForm::RowMajor`] and [`ImageForm::Packed`].
 	RowMajorPacked,
 
 	/// The image is in column-major form and packed.
-	/// Implies [`ImageForm::ColumnMajor`].and [`ImageForm::Packed`].
+	/// Implies [`ImageForm::ColumnMajor`] and [`ImageForm::Packed`].
 	ColumnMajorPacked,
+
+	/// The image has width = 1.
+	/// Implies [`ImageForm::ColumnMajor`].
+	VerticalStripe,
+
+	/// The image has height = 1.
+	/// Implies [`ImageForm::RowMajor`].
+	HorizontalStripe,
+
+	/// The image has width = 1 and packed.
+	/// Implies [`ImageForm::ColumnMajor`] and [`ImageForm::Packed`].
+	VerticalStripePacked,
+
+	/// The image has height = 1 and packed.
+	/// Implies [`ImageForm::RowMajor`] and [`ImageForm::Packed`].
+	HorizontalStripePacked,
 }
 
 impl ImageForm {
-	#[rustfmt::skip]
 	pub fn implies(&self, other: &Self) -> bool {
 		use ImageForm::*;
 
-		if self == other {
-			return true;
-		}
-
 		// TODO make constant instead of recursive?
 		match self {
-			Unaliased         => NonEmpty.implies(other),
+			_ if self == other => true,
 
-			Packed            => Unaliased.implies(other),
+			Unaliased => NonEmpty.implies(other),
 
-			SinglePixel       => Unaliased.implies(other),
+			Packed => Unaliased.implies(other),
+
+			SinglePixel => Unaliased.implies(other),
 			SinglePixelPacked => Packed.implies(other) || SinglePixel.implies(other),
 
-			RowMajor          => Unaliased.implies(other),
-			RowMajorPacked    => Packed.implies(other) || RowMajor.implies(other),
+			RowMajor => Unaliased.implies(other),
+			RowMajorPacked => Packed.implies(other) || RowMajor.implies(other),
 
-			ColumnMajor       => Unaliased.implies(other),
+			ColumnMajor => Unaliased.implies(other),
 			ColumnMajorPacked => Packed.implies(other) || ColumnMajor.implies(other),
 
 			_ => false,
@@ -185,39 +189,39 @@ impl ImageForm {
 	}
 
 	pub fn is_non_empty(&self) -> bool {
-		self >= &ImageForm::NonEmpty
+		self >= &Self::NonEmpty
 	}
 
 	pub fn is_unaliased(&self) -> bool {
-		self >= &ImageForm::Unaliased
+		self >= &Self::Unaliased
 	}
 
 	pub fn is_packed(&self) -> bool {
-		self >= &ImageForm::Packed
+		self >= &Self::Packed
 	}
 
 	pub fn is_single_pixel(&self) -> bool {
-		self >= &ImageForm::SinglePixel
+		self >= &Self::SinglePixel
 	}
 
 	pub fn is_single_pixel_packed(&self) -> bool {
-		self >= &ImageForm::SinglePixelPacked
+		self >= &Self::SinglePixelPacked
 	}
 
 	pub fn is_row_major(&self) -> bool {
-		self >= &ImageForm::RowMajor
+		self >= &Self::RowMajor
 	}
 
 	pub fn is_column_major(&self) -> bool {
-		self >= &ImageForm::ColumnMajor
+		self >= &Self::ColumnMajor
 	}
 
 	pub fn is_row_major_packed(&self) -> bool {
-		self >= &ImageForm::RowMajorPacked
+		self >= &Self::RowMajorPacked
 	}
 
 	pub fn is_column_major_packed(&self) -> bool {
-		self >= &ImageForm::ColumnMajorPacked
+		self >= &Self::ColumnMajorPacked
 	}
 }
 
