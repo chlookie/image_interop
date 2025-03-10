@@ -158,7 +158,7 @@ pub enum ImageForm {
 
 impl ImageForm {
 	#[rustfmt::skip]
-	fn implies(&self, other: &Self) -> bool {
+	pub fn implies(&self, other: &Self) -> bool {
 		use ImageForm::*;
 
 		if self == other {
@@ -182,6 +182,42 @@ impl ImageForm {
 
 			_ => false,
 		}
+	}
+
+	pub fn is_non_empty(&self) -> bool {
+		self >= &ImageForm::NonEmpty
+	}
+
+	pub fn is_unaliased(&self) -> bool {
+		self >= &ImageForm::Unaliased
+	}
+
+	pub fn is_packed(&self) -> bool {
+		self >= &ImageForm::Packed
+	}
+
+	pub fn is_single_pixel(&self) -> bool {
+		self >= &ImageForm::SinglePixel
+	}
+
+	pub fn is_single_pixel_packed(&self) -> bool {
+		self >= &ImageForm::SinglePixelPacked
+	}
+
+	pub fn is_row_major(&self) -> bool {
+		self >= &ImageForm::RowMajor
+	}
+
+	pub fn is_column_major(&self) -> bool {
+		self >= &ImageForm::ColumnMajor
+	}
+
+	pub fn is_row_major_packed(&self) -> bool {
+		self >= &ImageForm::RowMajorPacked
+	}
+
+	pub fn is_column_major_packed(&self) -> bool {
+		self >= &ImageForm::ColumnMajorPacked
 	}
 }
 
