@@ -7,7 +7,8 @@ use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
 use crate::{
-	Channels, ImageIter, ImageIterMut, ImageView, ImageViewMut, Pixel, PixelToComponents, PixelView, PixelViewMut,
+	Channels, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut, Pixel, PixelToComponents, PixelView,
+	PixelViewMut,
 };
 
 /*
@@ -73,8 +74,8 @@ pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>> {
 
 impl<P: Pixel> Image<P, Vec<P::Scalar>> {
 	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
-	pub fn new(width: u32, height: u32) -> Result<Self> {
-		let layout = ImageLayout::row_major_packed(Self::CHANNELS, width, height)?;
+	pub fn new(width: u32, height: u32) -> Self {
+		let layout = ImageLayout::row_major_packed(Self::CHANNELS, width, height);
 
 		let buffer = vec![P::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
 

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, ops::BitOr};
+use std::cmp::Ordering;
 
 use crate::Channels;
 
@@ -92,17 +92,18 @@ impl ImageLayout {
 	}
 
 	pub fn max_samples(&self) -> usize {
-		// Since we are using strides, can't just do width*height
-		if self.is_row_major() {
-			// stride_y > stride_x
-			self.stride_y.checked_mul(self.height)
-		} else if self.is_column_major() {
-			// stride_x > stride_y
-			self.stride_x.checked_mul(self.width)
-		} else {
-			// Layout is malformed
-			None
-		}
+		todo!()
+		// // Since we are using strides, can't just do width*height
+		// if self.is_row_major() {
+		// 	// stride_y > stride_x
+		// 	self.stride_y.checked_mul(self.height)
+		// } else if self.is_column_major() {
+		// 	// stride_x > stride_y
+		// 	self.stride_x.checked_mul(self.width)
+		// } else {
+		// 	// Layout is malformed
+		// 	None
+		// }
 	}
 
 	pub fn index(&self, x: u32, y: u32) -> usize {
@@ -119,7 +120,7 @@ impl ImageLayout {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ImageForm {
 	/// The image has width > 0 and height > 0.
-	WellFormed,
+	NonEmpty,
 
 	/// The image doesn't have aliased pixel.
 	/// In other words, for a given pixel in the buffer, there is at most one coordinate pair that maps to the pixel.
@@ -156,23 +157,28 @@ pub enum ImageForm {
 }
 
 impl ImageForm {
+	#[rustfmt::skip]
 	fn implies(&self, other: &Self) -> bool {
-		match (self, other) {
-			(Self::Unaliased, Self::WellFormed) => true,
+		use ImageForm::*;
 
-			(Self::Packed, Self::Unaliased) => true,
+		if self == other {
+			return true;
+		}
 
-			(Self::SinglePixel, Self::Unaliased) => true,
-			(Self::SinglePixelPacked, Self::SinglePixel) => true,
-			(Self::SinglePixelPacked, Self::Packed) => true,
+		// TODO make constant instead of recursive?
+		match self {
+			Unaliased         => NonEmpty.implies(other),
 
-			(Self::RowMajor, Self::Unaliased) => true,
-			(Self::RowMajorPacked, Self::RowMajor) => true,
-			(Self::RowMajorPacked, Self::Packed) => true,
+			Packed            => Unaliased.implies(other),
 
-			(Self::ColumnMajor, Self::Unaliased) => true,
-			(Self::ColumnMajorPacked, Self::ColumnMajor) => true,
-			(Self::ColumnMajorPacked, Self::Packed) => true,
+			SinglePixel       => Unaliased.implies(other),
+			SinglePixelPacked => Packed.implies(other) || SinglePixel.implies(other),
+
+			RowMajor          => Unaliased.implies(other),
+			RowMajorPacked    => Packed.implies(other) || RowMajor.implies(other),
+
+			ColumnMajor       => Unaliased.implies(other),
+			ColumnMajorPacked => Packed.implies(other) || ColumnMajor.implies(other),
 
 			_ => false,
 		}
@@ -187,5 +193,36 @@ impl PartialOrd for ImageForm {
 			(x, y) if y.implies(&x) => Some(Ordering::Less),
 			_ => None,
 		}
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_image_form_partial_ord() {
+		assert!(ImageForm::NonEmpty >= ImageForm::NonEmpty);
+		assert!(ImageForm::Packed <= ImageForm::Packed);
+
+		assert!(ImageForm::Packed >= ImageForm::Unaliased);
+		assert!(ImageForm::Packed >= ImageForm::NonEmpty);
+
+		assert!(ImageForm::Packed >= ImageForm::Unaliased);
+		assert!(ImageForm::Packed >= ImageForm::NonEmpty);
+
+		assert!(ImageForm::Packed <= ImageForm::SinglePixelPacked);
+		assert!(ImageForm::SinglePixel <= ImageForm::SinglePixelPacked);
+		assert!(ImageForm::NonEmpty <= ImageForm::SinglePixelPacked);
+
+		assert!(!(ImageForm::SinglePixel < ImageForm::SinglePixel));
+		assert!(!(ImageForm::Packed <= ImageForm::Unaliased));
+		assert!(!(ImageForm::Packed <= ImageForm::NonEmpty));
 	}
 }
