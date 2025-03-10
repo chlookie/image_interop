@@ -32,50 +32,23 @@ pub struct ImageLayout {
 }
 
 impl ImageLayout {
-	pub fn new(width: u32, height: u32, stride_x: usize, stride_y: usize) -> Result<Self> {
-		ensure!(width > 0, "Cannot have 0-width image layout.");
-		ensure!(height > 0, "Cannot have 0-height image layout.");
-
-		if width == 1 {
-			if height > 1 {
-				// strides have no meaning here
-			} else {
-				
-			}
-		} else if height == 1 {
-		} else {
-			if stride_x < stride_y {
-				// Layout is supposed to be row major
-				ensure!(
-					stride_y >= width as usize * stride_x,
-					"Image layout would lead to aliased pixels, stride_y is too small."
-				);
-			} else {
-				// Layout is supposed to be column major
-				ensure!(
-					stride_x >= height as usize * stride_y,
-					"Image layout would lead to aliased pixels, stride_x is too small."
-				);
-			}
-			// strides cannot possibly be equal after both checks above.
-		}
-
-		Ok(ImageLayout {
+	pub fn new(width: u32, height: u32, stride_x: usize, stride_y: usize) -> Self {
+		ImageLayout {
 			width,
 			height,
 			stride_x,
 			stride_y,
-		})
+		}
 	}
 
-	pub fn row_major_packed(channels: Channels, width: u32, height: u32) -> Result<Self> {
+	pub fn row_major_packed(channels: Channels, width: u32, height: u32) -> Self {
 		let stride_x = channels;
 		let stride_y = channels * width as usize;
 
 		Self::new(width, height, stride_x, stride_y)
 	}
 
-	pub fn column_major_packed(channels: Channels, width: u32, height: u32) -> Result<Self> {
+	pub fn column_major_packed(channels: Channels, width: u32, height: u32) -> Self {
 		let stride_x = channels * height as usize;
 		let stride_y = channels;
 
@@ -97,6 +70,8 @@ impl ImageLayout {
 	pub fn stride_y(&self) -> usize {
 		self.stride_y
 	}
+
+	pub fn form(&self) -> ImageLayoutForm {}
 
 	pub fn is_row_major(&self) -> bool {
 		if self.width == 1 {
@@ -159,6 +134,26 @@ impl ImageLayout {
 
 	pub fn index(&self, x: u32, y: u32) -> usize {
 		(x * self.stride_x + y * self.stride_y) as usize
+	}
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ImageLayoutForm {
+	Malformed,
+	SinglePixel,
+	Unaliased,
+	RowMajor,
+	ColumnMajor,
+	RowMajorPacked,
+	ColumnMajorPacked,
+}
+
+impl ImageLayoutForm {
+	pub fn is_well_formed(&self) -> bool {
+		match self {
+			ImageLayoutForm::Malformed => false,
+			_ => true,
+		}
 	}
 }
 
