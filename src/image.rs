@@ -19,46 +19,103 @@ use crate::{
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ImageLayout {
 	/// The width of the image.
-	pub width: u32,
+	width: u32,
 
 	/// The height of the image.
-	pub height: u32,
+	height: u32,
 
 	/// Add this stride to get to the next pixel in the x-direction.
-	pub stride_x: u32,
+	stride_x: usize,
 
 	/// Add this stride to get to the next pixel in the y-direction.
-	pub stride_y: u32,
+	stride_y: usize,
 }
 
 impl ImageLayout {
-	pub fn row_major_packed(channels: Channels, width: u32, height: u32) -> Self {
-		ImageLayout {
+	pub fn new(width: u32, height: u32, stride_x: usize, stride_y: usize) -> Result<Self> {
+		ensure!(width > 0, "Cannot have 0-width image layout.");
+		ensure!(height > 0, "Cannot have 0-height image layout.");
+
+		if width == 1 {
+			if height > 1 {
+				// strides have no meaning here
+			} else {
+				
+			}
+		} else if height == 1 {
+		} else {
+			if stride_x < stride_y {
+				// Layout is supposed to be row major
+				ensure!(
+					stride_y >= width as usize * stride_x,
+					"Image layout would lead to aliased pixels, stride_y is too small."
+				);
+			} else {
+				// Layout is supposed to be column major
+				ensure!(
+					stride_x >= height as usize * stride_y,
+					"Image layout would lead to aliased pixels, stride_x is too small."
+				);
+			}
+			// strides cannot possibly be equal after both checks above.
+		}
+
+		Ok(ImageLayout {
 			width,
 			height,
-			stride_x: channels as u32,
-			stride_y: channels as u32 * width,
-		}
+			stride_x,
+			stride_y,
+		})
 	}
 
-	pub fn column_major_packed(channels: Channels, width: u32, height: u32) -> Self {
-		ImageLayout {
-			width,
-			height,
-			stride_x: channels as u32 * height,
-			stride_y: channels as u32,
-		}
+	pub fn row_major_packed(channels: Channels, width: u32, height: u32) -> Result<Self> {
+		let stride_x = channels;
+		let stride_y = channels * width as usize;
+
+		Self::new(width, height, stride_x, stride_y)
+	}
+
+	pub fn column_major_packed(channels: Channels, width: u32, height: u32) -> Result<Self> {
+		let stride_x = channels * height as usize;
+		let stride_y = channels;
+
+		Self::new(width, height, stride_x, stride_y)
+	}
+
+	pub fn width(&self) -> u32 {
+		self.width
+	}
+
+	pub fn height(&self) -> u32 {
+		self.height
+	}
+
+	pub fn stride_x(&self) -> usize {
+		self.stride_x
+	}
+
+	pub fn stride_y(&self) -> usize {
+		self.stride_y
 	}
 
 	pub fn is_row_major(&self) -> bool {
-		self.stride_x < self.stride_y
+		if self.width == 1 {
+			self.stride_x >= self.stride_y
+		} else if self.height == 1 {
+			self.stride_x < self.stride_y
+		} else {
+		}
 	}
 
 	pub fn is_column_major(&self) -> bool {
-		self.stride_x > self.stride_y
+		todo!()
 	}
 
-	pub fn major_stride(&self) -> u32 {
+	pub fn is_packed(&self) -> bool {
+		todo!()
+	}
+
+	pub fn major_stride(&self) -> usize {
 		if self.is_row_major() {
 			self.stride_y
 		} else {
@@ -66,7 +123,7 @@ impl ImageLayout {
 		}
 	}
 
-	pub fn minor_stride(&self) -> u32 {
+	pub fn minor_stride(&self) -> usize {
 		if self.is_row_major() {
 			self.stride_x
 		} else {
@@ -82,7 +139,11 @@ impl ImageLayout {
 		if self.is_row_major() { self.width } else { self.height }
 	}
 
-	fn total_pixels(&self) -> Option<u32> {
+	pub fn total_pixels(&self) -> u32 {
+		self.width * self.height
+	}
+
+	pub fn max_samples(&self) -> usize {
 		// Since we are using strides, can't just do width*height
 		if self.is_row_major() {
 			// stride_y > stride_x
@@ -107,7 +168,43 @@ impl ImageLayout {
 --------------------------------------------------------------------------------
 */
 
-/// A custom image type.
+/// A generic image container that can store pixels of any type that implements the [`Pixel`] trait.
+/// The image data can be stored in any buffer type that implements the necessary traits (typically [`Vec`]).
+///
+/// The image supports both row-major and column-major layouts, with configurable strides for both
+/// dimensions. This allows for efficient representation of sub-images and different memory layouts.
+///
+/// # Type Parameters
+///
+/// * `P`: The pixel type, which must implement the [`Pixel`] trait
+/// * `Buffer`: The underlying buffer type, defaults to `Vec<<P as Pixel>::Scalar>`
+///
+/// # Examples
+///
+/// ```
+/// use image_interop::{Image, Rgb};
+///
+/// // Create a new 800x600 RGB image
+/// let mut image: Image<Rgb> = Image::new(800, 600);
+///
+/// // Access pixels
+/// image.put_pixel(0, 0, Rgb::new(255, 0, 0)); // Set first pixel to red
+///
+/// // Iterate over all pixels
+/// for (x, y, pixel) in image.enumerate_pixels() {
+///     // Process each pixel
+/// }
+/// ```
+///
+/// The image can also be created from existing data:
+///
+/// ```
+/// use image_interop::{Image, ImageLayout, Rgb};
+///
+/// let buffer = vec![0u8; 800 * 600 * 3];
+/// let layout = ImageLayout::row_major_packed(3, 800, 600);
+/// let image = Image::<Rgb, _>::from_buffer(buffer, layout).unwrap();
+/// ```
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>> {
 	/// The backing buffer of the image, which contains the actual samples.
@@ -122,10 +219,10 @@ pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>> {
 
 impl<P: Pixel> Image<P, Vec<P::Scalar>> {
 	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
-	pub fn new(width: u32, height: u32) -> Self {
-		let buffer = vec![P::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
+	pub fn new(width: u32, height: u32) -> Result<Self> {
+		let layout = ImageLayout::row_major_packed(Self::CHANNELS, width, height)?;
 
-		let layout = ImageLayout::row_major_packed(Self::CHANNELS, width, height);
+		let buffer = vec![P::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
 
 		// Sanity check that the layout/buffer dimensions are correct
 		debug_assert!(
@@ -194,8 +291,7 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 	}
 
 	pub fn expected_total_samples(layout: ImageLayout) -> usize {
-		let pixels = layout.total_pixels().unwrap();
-		pixels as usize * Self::CHANNELS
+		layout.max_samples() * Self::CHANNELS
 	}
 
 	fn pixel_range(&self, x: u32, y: u32) -> Range<usize> {
