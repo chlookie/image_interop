@@ -1,4 +1,4 @@
-use crate::{Color, ColorComponents, components::*, declare_color_format};
+use crate::{Color, ColorComponents, components::*, declare_color_format, spaces::*};
 
 /*
 --------------------------------------------------------------------------------
@@ -17,51 +17,61 @@ declare_color_format!(XYZA: X, Y, Z, Alpha);
 impl Color for bevy_color::Srgba {
 	type Scalar = f32;
 	type Format = RGBA;
+	type Space = SRGB;
 }
 
 impl Color for bevy_color::LinearRgba {
 	type Scalar = f32;
 	type Format = RGBA;
+	type Space = LinearRGB;
 }
 
 impl Color for bevy_color::Hsla {
 	type Scalar = f32;
 	type Format = HSLA;
+	type Space = HSL;
 }
 
 impl Color for bevy_color::Hsva {
 	type Scalar = f32;
 	type Format = HSVA;
+	type Space = HSV;
 }
 
 impl Color for bevy_color::Hwba {
 	type Scalar = f32;
 	type Format = HWBA;
+	type Space = HWB;
 }
 
 impl Color for bevy_color::Laba {
 	type Scalar = f32;
 	type Format = LABA;
+	type Space = CieLab;
 }
 
 impl Color for bevy_color::Lcha {
 	type Scalar = f32;
 	type Format = LCHA;
+	type Space = CieLCh;
 }
 
 impl Color for bevy_color::Oklaba {
 	type Scalar = f32;
 	type Format = LABA;
+	type Space = OkLab;
 }
 
 impl Color for bevy_color::Oklcha {
 	type Scalar = f32;
 	type Format = LCHA;
+	type Space = OkLCh;
 }
 
 impl Color for bevy_color::Xyza {
 	type Scalar = f32;
 	type Format = XYZA;
+	type Space = CieXYZD65;
 }
 
 impl<T> ColorComponents for T

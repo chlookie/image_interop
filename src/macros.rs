@@ -61,25 +61,25 @@ macro_rules! declare_color_component {
 
 #[macro_export]
 macro_rules! declare_color_format {
-	($alias:ident: $($channels:ty),+) => {
+	($name:ident: $($channels:ty),+) => {
 
 		#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-		pub struct $alias;
+		pub struct $name;
 
-		impl<Scalar: $crate::ScalarPrimitive> $crate::ColorFormat<Scalar> for $alias {
+		impl<Scalar: $crate::ScalarPrimitive> $crate::ColorFormat<Scalar> for $name {
 			const CHANNELS: $crate::Channels = declare_color_format!(@count_channels $($channels,)*);
 		}
 
-		declare_color_format!(@iter_channels 0, $alias: $($channels,)+);
+		declare_color_format!(@iter_channels 0, $name: $($channels,)+);
 	};
 
-	(@iter_channels $index:expr, $alias:ident: ) => {};
+	(@iter_channels $index:expr, $name:ident: ) => {};
 
-	(@iter_channels $index:expr, $alias:ident: $channel:ty, $($channels:ty,)*) => {paste::paste!{
+	(@iter_channels $index:expr, $name:ident: $channel:ty, $($channels:ty,)*) => {paste::paste!{
 		#[allow(unused_imports)]
 		use $crate::components::*;
 
-		impl<Scalar: $crate::ScalarPrimitive> [<$channel Component>]<Scalar> for $alias {
+		impl<Scalar: $crate::ScalarPrimitive> [<$channel Component>]<Scalar> for $name {
 			fn component(slice: &[Scalar]) -> Scalar {
 				slice[$index]
 			}
@@ -89,9 +89,29 @@ macro_rules! declare_color_format {
 			}
 		}
 
-		declare_color_format!(@iter_channels ($index+1), $alias: $($channels,)*);
+		declare_color_format!(@iter_channels ($index+1), $name: $($channels,)*);
 	}};
 
 	(@count_channels $channel:ty, $($channels:ty,)*) => {1 + declare_color_format!(@count_channels $($channels,)*)};
 	(@count_channels ) => {0};
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+#[macro_export]
+macro_rules! declare_color_space {
+	($name:ident) => {
+		declare_color_space!($name, "");
+	};
+
+	($name:ident, $doc:expr) => {
+		#[doc = $doc]
+		#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+		pub struct $name;
+		impl $crate::ColorSpace for $name {}
+	};
 }

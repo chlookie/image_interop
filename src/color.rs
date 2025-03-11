@@ -1,6 +1,6 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use crate::{Channels, Color, ColorComponents, ColorFormat, ScalarPrimitive};
+use crate::{Channels, Color, ColorComponents, ColorFormat, ColorSpace, ScalarPrimitive};
 
 /*
 --------------------------------------------------------------------------------
@@ -29,6 +29,26 @@ pub mod components {
 	declare_color_component!(Z);
 }
 
+pub mod spaces {
+	use crate::declare_color_space;
+
+	declare_color_space!(
+		RGB,
+		"A color space with sRGB primaries, but unknown whether its transfer function is linear or nonlinear with gamma. The library client needs to make a choice based on any assumptions they can make."
+	);
+
+	declare_color_space!(LinearRGB, "The linear-light RGB color space with sRGB primaries.");
+	declare_color_space!(SRGB, "The standard RGB color space.");
+	declare_color_space!(HSL);
+	declare_color_space!(HSV);
+	declare_color_space!(HWB);
+	declare_color_space!(CieLab);
+	declare_color_space!(CieLCh);
+	declare_color_space!(CieXYZD65);
+	declare_color_space!(OkLab);
+	declare_color_space!(OkLCh);
+}
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -37,12 +57,13 @@ pub mod components {
 
 /// Const generic CHANNELS required because we don't have const_generic_expressions yet
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct GenericColor<const CHANNELS: Channels, Format, Scalar> {
+pub struct GenericColor<const CHANNELS: Channels, Format, Scalar, Space> {
 	pub color: [Scalar; CHANNELS],
 	_format: PhantomData<Format>,
+	_space: PhantomData<Space>,
 }
 
-impl<const CHANNELS: Channels, Format, Scalar> Default for GenericColor<{ CHANNELS }, Format, Scalar>
+impl<const CHANNELS: Channels, Format, Scalar, Space> Default for GenericColor<{ CHANNELS }, Format, Scalar, Space>
 where
 	Scalar: Default + Copy,
 {
@@ -50,25 +71,29 @@ where
 		Self {
 			color: [Default::default(); CHANNELS],
 			_format: Default::default(),
+			_space: Default::default(),
 		}
 	}
 }
 
-impl<const CHANNELS: Channels, Format, Scalar> Color for GenericColor<{ CHANNELS }, Format, Scalar>
+impl<const CHANNELS: Channels, Format, Scalar, Space> Color for GenericColor<{ CHANNELS }, Format, Scalar, Space>
 where
 	Scalar: ScalarPrimitive,
 	Format: Copy + ColorFormat<Scalar>,
+	Space: Copy + ColorSpace,
 {
 	type Scalar = Scalar;
 	type Format = Format;
+	type Space = Space;
 }
 
 macro_rules! impl_color_components_for_generic_color {
 	($channels:expr, $tuple:ty) => {
-		impl<Format, Scalar> ColorComponents for GenericColor<{ $channels }, Format, Scalar>
+		impl<Format, Scalar, Space> ColorComponents for GenericColor<{ $channels }, Format, Scalar, Space>
 		where
 			Scalar: ScalarPrimitive,
 			Format: Copy + ColorFormat<Scalar>,
+			Space: Copy + ColorSpace,
 		{
 			type Tuple = $tuple;
 			type Array = [Scalar; $channels];
@@ -89,6 +114,7 @@ macro_rules! impl_color_components_for_generic_color {
 				Self {
 					color: array,
 					_format: PhantomData,
+					_space: PhantomData,
 				}
 			}
 
