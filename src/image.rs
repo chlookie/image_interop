@@ -275,17 +275,17 @@ where
 		self.buffer
 			.chunks_exact(major_stride)
 			.enumerate()
-			.flat_map(move |(outer_index, padded_chunk)| {
+			.flat_map(move |(major_index, padded_chunk)| {
 				let chunk = &padded_chunk[..minor_length as usize];
 
 				chunk
 					.chunks_exact(minor_stride)
 					.enumerate()
-					.map(move |(inner_index, padded_pixel)| {
+					.map(move |(minor_index, padded_pixel)| {
 						let (x, y) = if layout.is_row_major() {
-							(inner_index, outer_index)
+							(minor_index, major_index)
 						} else {
-							(outer_index, inner_index)
+							(major_index, minor_index)
 						};
 						let slice = &padded_pixel[..Self::CHANNELS];
 						let pixel = P::as_view_unchecked(slice);
@@ -332,17 +332,17 @@ where
 		self.buffer
 			.chunks_exact_mut(major_stride)
 			.enumerate()
-			.flat_map(move |(outer_index, padded_chunk)| {
+			.flat_map(move |(major_index, padded_chunk)| {
 				let chunk = &mut padded_chunk[..minor_length as usize];
 
 				chunk
 					.chunks_exact_mut(minor_stride)
 					.enumerate()
-					.map(move |(inner_index, padded_pixel)| {
+					.map(move |(minor_index, padded_pixel)| {
 						let (x, y) = if layout.is_row_major() {
-							(inner_index, outer_index)
+							(minor_index, major_index)
 						} else {
-							(outer_index, inner_index)
+							(major_index, minor_index)
 						};
 						let slice = &mut padded_pixel[..Self::CHANNELS];
 						let pixel = P::as_view_mut_unchecked(slice);
@@ -408,17 +408,17 @@ mod par_iter {
 			self.buffer
 				.par_chunks_exact(major_stride)
 				.enumerate()
-				.flat_map(move |(outer_index, padded_chunk)| {
+				.flat_map(move |(major_index, padded_chunk)| {
 					let chunk = &padded_chunk[..minor_length as usize];
 
 					chunk
 						.par_chunks_exact(minor_stride)
 						.enumerate()
-						.map(move |(inner_index, padded_pixel)| {
+						.map(move |(minor_index, padded_pixel)| {
 							let (x, y) = if layout.is_row_major() {
-								(inner_index, outer_index)
+								(minor_index, major_index)
 							} else {
-								(outer_index, inner_index)
+								(major_index, minor_index)
 							};
 							let slice = &padded_pixel[..Self::CHANNELS];
 							let pixel = P::as_view_unchecked(slice);
@@ -468,17 +468,17 @@ mod par_iter {
 			self.buffer
 				.par_chunks_exact_mut(major_stride)
 				.enumerate()
-				.flat_map(move |(outer_index, padded_chunk)| {
+				.flat_map(move |(major_index, padded_chunk)| {
 					let chunk = &mut padded_chunk[..minor_length as usize];
 
 					chunk
 						.par_chunks_exact_mut(minor_stride)
 						.enumerate()
-						.map(move |(inner_index, padded_pixel)| {
+						.map(move |(minor_index, padded_pixel)| {
 							let (x, y) = if layout.is_row_major() {
-								(inner_index, outer_index)
+								(minor_index, major_index)
 							} else {
-								(outer_index, inner_index)
+								(major_index, minor_index)
 							};
 							let slice = &mut padded_pixel[..Self::CHANNELS];
 							let pixel = P::as_view_mut_unchecked(slice);
