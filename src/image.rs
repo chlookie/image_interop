@@ -76,8 +76,13 @@ impl<P: Pixel> Image<P, Vec<P::Scalar>> {
 	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
 	pub fn new(width: u32, height: u32) -> Self {
 		let layout = ImageLayout::row_major_packed(Self::CHANNELS, width, height);
-
 		let buffer = vec![P::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
+
+		// Sanity check that the layout is well-formed
+		debug_assert!(
+			layout.is_well_formed(),
+			"The auto-generated layout is malformed, this is a bug."
+		);
 
 		// Sanity check that the layout/buffer dimensions are correct
 		debug_assert!(
@@ -116,7 +121,10 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 	where
 		Buffer: Deref<Target = [P::Scalar]>,
 	{
-		// Sanity check that the layout/buffer dimensions are correct
+		// Check that the layout is well-formed
+		ensure!(layout.is_well_formed(), "The given layout is malformed.");
+
+		// Check that the layout/buffer dimensions are correct
 		ensure!(
 			buffer.len() >= Self::expected_total_samples(layout),
 			"The given buffer is too small to fit the entire image as dictated by the given layout."
@@ -146,7 +154,8 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 	}
 
 	pub fn expected_total_samples(layout: ImageLayout) -> usize {
-		layout.total_padded_pixels() * Self::CHANNELS
+		// Layout is checked for well-formed-ness at image construction
+		layout.total_padded_pixels().unwrap() * Self::CHANNELS
 	}
 
 	fn pixel_range(&self, x: u32, y: u32) -> Range<usize> {
@@ -241,34 +250,38 @@ where
 
 	/// Returns an iterator over the pixels of the image.
 	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<P>> {
+		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+		let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
-		self.buffer
-			.chunks_exact(layout.major_stride() as usize)
-			.flat_map(move |padded_chunk| {
-				let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+		self.buffer.chunks_exact(major_stride).flat_map(move |padded_chunk| {
+			let chunk = &padded_chunk[..minor_length as usize];
 
-				chunk
-					.chunks_exact(layout.minor_stride() as usize)
-					.map(move |padded_pixel| {
-						let slice = &padded_pixel[..Self::CHANNELS];
-						P::as_view_unchecked(slice)
-					})
+			chunk.chunks_exact(minor_stride as usize).map(move |padded_pixel| {
+				let slice = &padded_pixel[..Self::CHANNELS];
+				P::as_view_unchecked(slice)
 			})
+		})
 	}
 
 	/// Returns an iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<P>)> {
+		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+		let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
 		self.buffer
-			.chunks_exact(layout.major_stride() as usize)
+			.chunks_exact(major_stride)
 			.enumerate()
 			.flat_map(move |(outer_index, padded_chunk)| {
-				let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+				let chunk = &padded_chunk[..minor_length as usize];
 
-				chunk.chunks_exact(layout.minor_stride() as usize).enumerate().map(
-					move |(inner_index, padded_pixel)| {
+				chunk
+					.chunks_exact(minor_stride)
+					.enumerate()
+					.map(move |(inner_index, padded_pixel)| {
 						let (x, y) = if layout.is_row_major() {
 							(inner_index, outer_index)
 						} else {
@@ -278,8 +291,7 @@ where
 						let pixel = P::as_view_unchecked(slice);
 
 						(x as u32, y as u32, pixel)
-					},
-				)
+					})
 			})
 	}
 }
@@ -293,34 +305,40 @@ where
 
 	/// Returns an iterator over the mutable pixels of the image, usable with `rayon`.
 	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<P>> {
+		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+		let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
 		self.buffer
-			.chunks_exact_mut(layout.major_stride() as usize)
+			.chunks_exact_mut(major_stride)
 			.flat_map(move |padded_chunk| {
-				let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+				let chunk = &mut padded_chunk[..minor_length as usize];
 
-				chunk
-					.chunks_exact_mut(layout.minor_stride() as usize)
-					.map(move |padded_pixel| {
-						let slice = &mut padded_pixel[..Self::CHANNELS];
-						P::as_view_mut_unchecked(slice)
-					})
+				chunk.chunks_exact_mut(minor_stride).map(move |padded_pixel| {
+					let slice = &mut padded_pixel[..Self::CHANNELS];
+					P::as_view_mut_unchecked(slice)
+				})
 			})
 	}
 
 	/// Returns an iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
 	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<P>)> {
+		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+		let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
 		self.buffer
-			.chunks_exact_mut(layout.major_stride() as usize)
+			.chunks_exact_mut(major_stride)
 			.enumerate()
 			.flat_map(move |(outer_index, padded_chunk)| {
-				let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+				let chunk = &mut padded_chunk[..minor_length as usize];
 
-				chunk.chunks_exact_mut(layout.minor_stride() as usize).enumerate().map(
-					move |(inner_index, padded_pixel)| {
+				chunk
+					.chunks_exact_mut(minor_stride)
+					.enumerate()
+					.map(move |(inner_index, padded_pixel)| {
 						let (x, y) = if layout.is_row_major() {
 							(inner_index, outer_index)
 						} else {
@@ -330,8 +348,7 @@ where
 						let pixel = P::as_view_mut_unchecked(slice);
 
 						(x as u32, y as u32, pixel)
-					},
-				)
+					})
 			})
 	}
 }
@@ -364,34 +381,40 @@ mod par_iter {
 
 		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
 		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<P>> {
+			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+			let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
 			self.buffer
-				.par_chunks_exact(layout.major_stride() as usize)
+				.par_chunks_exact(major_stride)
 				.flat_map(move |padded_chunk| {
-					let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+					let chunk = &padded_chunk[..minor_length as usize];
 
-					chunk
-						.par_chunks_exact(layout.minor_stride() as usize)
-						.map(move |padded_pixel| {
-							let slice = &padded_pixel[..Self::CHANNELS];
-							P::as_view_unchecked(slice)
-						})
+					chunk.par_chunks_exact(minor_stride).map(move |padded_pixel| {
+						let slice = &padded_pixel[..Self::CHANNELS];
+						P::as_view_unchecked(slice)
+					})
 				})
 		}
 
 		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<P>)> {
+			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+			let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
 			self.buffer
-				.par_chunks_exact(layout.major_stride() as usize)
+				.par_chunks_exact(major_stride)
 				.enumerate()
 				.flat_map(move |(outer_index, padded_chunk)| {
-					let chunk = &padded_chunk[..layout.minor_sidelength() as usize];
+					let chunk = &padded_chunk[..minor_length as usize];
 
-					chunk.par_chunks_exact(layout.minor_stride() as usize).enumerate().map(
-						move |(inner_index, padded_pixel)| {
+					chunk
+						.par_chunks_exact(minor_stride)
+						.enumerate()
+						.map(move |(inner_index, padded_pixel)| {
 							let (x, y) = if layout.is_row_major() {
 								(inner_index, outer_index)
 							} else {
@@ -401,8 +424,7 @@ mod par_iter {
 							let pixel = P::as_view_unchecked(slice);
 
 							(x as u32, y as u32, pixel)
-						},
-					)
+						})
 				})
 		}
 	}
@@ -419,34 +441,38 @@ mod par_iter {
 
 		/// Returns a parallel iterator over the mutable pixels of the image, usable with `rayon`.
 		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<P>> {
+			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+			let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
 			self.buffer
-				.par_chunks_exact_mut(layout.major_stride() as usize)
+				.par_chunks_exact_mut(major_stride)
 				.flat_map(move |padded_chunk| {
-					let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+					let chunk = &mut padded_chunk[..minor_length as usize];
 
-					chunk
-						.par_chunks_exact_mut(layout.minor_stride() as usize)
-						.map(move |padded_pixel| {
-							let slice = &mut padded_pixel[..Self::CHANNELS];
-							P::as_view_mut_unchecked(slice)
-						})
+					chunk.par_chunks_exact_mut(minor_stride).map(move |padded_pixel| {
+						let slice = &mut padded_pixel[..Self::CHANNELS];
+						P::as_view_mut_unchecked(slice)
+					})
 				})
 		}
 
 		/// Returns a parallel iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
 		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<P>)> {
+			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
+			let (_, minor_length) = layout.major_minor_sidelengths().unwrap();
 
 			self.buffer
-				.par_chunks_exact_mut(layout.major_stride() as usize)
+				.par_chunks_exact_mut(major_stride)
 				.enumerate()
 				.flat_map(move |(outer_index, padded_chunk)| {
-					let chunk = &mut padded_chunk[..layout.minor_sidelength() as usize];
+					let chunk = &mut padded_chunk[..minor_length as usize];
 
 					chunk
-						.par_chunks_exact_mut(layout.minor_stride() as usize)
+						.par_chunks_exact_mut(minor_stride)
 						.enumerate()
 						.map(move |(inner_index, padded_pixel)| {
 							let (x, y) = if layout.is_row_major() {

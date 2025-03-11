@@ -1,6 +1,4 @@
-use std::cmp::Ordering;
-
-use crate::{Channels, ImageForm};
+use crate::Channels;
 
 /*
 --------------------------------------------------------------------------------
@@ -47,67 +45,33 @@ impl ImageLayout {
 		Self::new(width, height, stride_x, stride_y)
 	}
 
-	pub fn form(&self) -> ImageForm {
-		if self.width == 0 || self.height == 0 {
-			ImageForm::Malformed
-		} else if self.width == 1 && self.height == 1 {
-			ImageForm::SinglePixel
-		} else if self.stride_y >= self.stride_x * self.width as usize {
-			ImageForm::RowMajor
-		} else if self.stride_x >= self.stride_y * self.height as usize {
-			ImageForm::ColumnMajor
-		} else {
-			ImageForm::Malformed
-		}
-	}
-
-	pub fn is_single_pixel(&self) -> bool {
-		self.form().is_single_pixel()
+	pub fn is_well_formed(&self) -> bool {
+		self.is_row_major() || self.is_column_major()
 	}
 
 	pub fn is_row_major(&self) -> bool {
-		self.form().is_row_major()
+		self.stride_y >= self.stride_x * self.width as usize
 	}
 
 	pub fn is_column_major(&self) -> bool {
-		self.form().is_column_major()
+		self.stride_x >= self.stride_y * self.height as usize
 	}
 
-	pub fn major_stride(&self) -> Option<usize> {
+	pub fn major_minor_strides(&self) -> Option<(usize, usize)> {
 		if self.is_row_major() {
-			Some(self.stride_y)
+			Some((self.stride_y, self.stride_x))
 		} else if self.is_column_major() {
-			Some(self.stride_x)
+			Some((self.stride_x, self.stride_y))
 		} else {
 			None
 		}
 	}
 
-	pub fn minor_stride(&self) -> Option<usize> {
+	pub fn major_minor_sidelengths(&self) -> Option<(u32, u32)> {
 		if self.is_row_major() {
-			Some(self.stride_x)
+			Some((self.height, self.width))
 		} else if self.is_column_major() {
-			Some(self.stride_y)
-		} else {
-			None
-		}
-	}
-
-	pub fn major_sidelength(&self) -> Option<u32> {
-		if self.is_row_major() || self.is_single_pixel() {
-			Some(self.height)
-		} else if self.is_column_major() {
-			Some(self.width)
-		} else {
-			None
-		}
-	}
-
-	pub fn minor_sidelength(&self) -> Option<u32> {
-		if self.is_row_major() || self.is_single_pixel() {
-			Some(self.width)
-		} else if self.is_column_major() {
-			Some(self.height)
+			Some((self.width, self.height))
 		} else {
 			None
 		}
@@ -119,16 +83,14 @@ impl ImageLayout {
 
 	pub fn total_padded_pixels(&self) -> Option<usize> {
 		// Since we are using strides, can't just do width*height
-		if self.is_single_pixel() {
-			Some(1)
-		} else if self.is_row_major() {
-			// stride_y > stride_x
+		if self.is_row_major() {
+			// stride_y >= stride_x
 			Some(self.stride_y * self.height as usize)
 		} else if self.is_column_major() {
-			// stride_x > stride_y
+			// stride_x >= stride_y
 			Some(self.stride_x * self.width as usize)
 		} else {
-			// Layout is malformed
+			// Cannot determine padded pixels
 			None
 		}
 	}
