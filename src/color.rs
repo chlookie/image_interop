@@ -57,13 +57,13 @@ pub mod spaces {
 
 /// Const generic CHANNELS required because we don't have const_generic_expressions yet
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct GenericColor<const CHANNELS: Channels, Format, Scalar, Space> {
+pub struct StaticColor<const CHANNELS: Channels, Format, Scalar, Space> {
 	pub color: [Scalar; CHANNELS],
 	_format: PhantomData<Format>,
 	_space: PhantomData<Space>,
 }
 
-impl<const CHANNELS: Channels, Format, Scalar, Space> Default for GenericColor<{ CHANNELS }, Format, Scalar, Space>
+impl<const CHANNELS: Channels, Format, Scalar, Space> Default for StaticColor<{ CHANNELS }, Format, Scalar, Space>
 where
 	Scalar: Default + Copy,
 {
@@ -76,7 +76,7 @@ where
 	}
 }
 
-impl<const CHANNELS: Channels, Format, Scalar, Space> Color for GenericColor<{ CHANNELS }, Format, Scalar, Space>
+impl<const CHANNELS: Channels, Format, Scalar, Space> Color for StaticColor<{ CHANNELS }, Format, Scalar, Space>
 where
 	Scalar: ScalarPrimitive,
 	Format: Copy + ColorFormat<Scalar>,
@@ -89,7 +89,7 @@ where
 
 macro_rules! impl_color_components_for_generic_color {
 	($channels:expr, $tuple:ty) => {
-		impl<Format, Scalar, Space> ColorComponents for GenericColor<{ $channels }, Format, Scalar, Space>
+		impl<Format, Scalar, Space> ColorComponents for StaticColor<{ $channels }, Format, Scalar, Space>
 		where
 			Scalar: ScalarPrimitive,
 			Format: Copy + ColorFormat<Scalar>,
