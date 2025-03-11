@@ -39,6 +39,7 @@ pub mod formats {
 	declare_color_format!(LAB: Lightness, A, B);
 	declare_color_format!(LCH: Lightness, Chroma, Hue);
 	declare_color_format!(XYZ: X, Y, Z);
+	declare_color_format!(Y: Y);
 
 	declare_color_format!(RGBA: Red, Green, Blue, Alpha);
 	declare_color_format!(HSLA: Hue, Saturation, Lightness, Alpha);
@@ -47,6 +48,7 @@ pub mod formats {
 	declare_color_format!(LABA: Lightness, A, B, Alpha);
 	declare_color_format!(LCHA: Lightness, Chroma, Hue, Alpha);
 	declare_color_format!(XYZA: X, Y, Z, Alpha);
+	declare_color_format!(YA: Y, Alpha);
 }
 
 pub mod spaces {
