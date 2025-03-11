@@ -6,6 +6,10 @@ use crate::{Color, ColorComponents, ColorConversion, formats, spaces};
 --------------------------------------------------------------------------------
 */
 
+mod sealed {
+	pub trait BevyColor {}
+}
+
 impl Color for bevy_color::Srgba {
 	type Scalar = f32;
 	type Format = formats::RGBA;
@@ -66,9 +70,20 @@ impl Color for bevy_color::Xyza {
 	type Space = spaces::CieXYZD65;
 }
 
+impl sealed::BevyColor for bevy_color::Srgba {}
+impl sealed::BevyColor for bevy_color::LinearRgba {}
+impl sealed::BevyColor for bevy_color::Hsla {}
+impl sealed::BevyColor for bevy_color::Hsva {}
+impl sealed::BevyColor for bevy_color::Hwba {}
+impl sealed::BevyColor for bevy_color::Laba {}
+impl sealed::BevyColor for bevy_color::Lcha {}
+impl sealed::BevyColor for bevy_color::Oklaba {}
+impl sealed::BevyColor for bevy_color::Oklcha {}
+impl sealed::BevyColor for bevy_color::Xyza {}
+
 impl<T> ColorComponents for T
 where
-	T: Color<Scalar = f32> + bevy_color::ColorToComponents,
+	T: sealed::BevyColor + Color<Scalar = f32> + bevy_color::ColorToComponents,
 {
 	type Tuple = (f32, f32, f32, f32);
 	type Array = [f32; 4];

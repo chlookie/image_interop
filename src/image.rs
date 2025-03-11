@@ -94,7 +94,7 @@ impl<C: Color, B> Image<C, B> {
 		})
 	}
 
-	pub fn convert<C2>(mut self) -> Image<C2, B>
+	pub fn convert_color<C2>(mut self) -> Image<C2, B>
 	where
 		C: ColorComponents,
 		C2: Color<Scalar = C::Scalar> + ColorComponents + ColorConversion<C>,
