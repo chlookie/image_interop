@@ -66,7 +66,7 @@ macro_rules! declare_color_format {
 		#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 		pub struct $name;
 
-		impl<Scalar: $crate::ScalarPrimitive> $crate::ColorFormat<Scalar> for $name {
+		impl<Scalar: $crate::ScalarPrimitive> $crate::StaticColorFormat<Scalar> for $name {
 			const CHANNELS: $crate::Channels = declare_color_format!(@count_channels $($channels,)*);
 		}
 
