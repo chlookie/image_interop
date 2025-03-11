@@ -186,9 +186,12 @@ pub trait ImageView {
 	/// The type of each pixel in the image.
 	type Pixel: Color;
 
-	/// Returns the number of channels the color format of the image has.
+	// The number of channels the image has.
+	const CHANNELS: Channels;
+
+	/// COnvenience mthod that returns the number of channels the image has.
 	fn channels(&self) -> Channels {
-		Self::Pixel::CHANNELS
+		Self::CHANNELS
 	}
 
 	/// The width and height of this image.

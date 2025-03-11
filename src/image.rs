@@ -154,6 +154,8 @@ where
 {
 	type Pixel = C;
 
+	const CHANNELS: Channels = Self::CHANNELS;
+
 	fn dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
 	}
