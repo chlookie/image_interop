@@ -49,6 +49,26 @@ macro_rules! declare_color_component {
 					*<C::Format as [<$type Component>]<C::Scalar>>::component_mut(self.slice) = [<$type:snake>]
 				}
 			}
+
+			#[allow(dead_code)]
+			impl<const CHANNELS: $crate::Channels, Format, Scalar, Space> [<Has $type>]<Scalar> for $crate::StaticColor<{ CHANNELS }, Format, Scalar, Space>
+			where
+				Format: [<$type Component>]<Scalar>,
+			{
+				fn [<$type:snake>](&self) -> Scalar {
+					<Format as [<$type Component>]<Scalar>>::component(&self.color)
+				}
+			}
+
+			#[allow(dead_code)]
+			impl<const CHANNELS: $crate::Channels, Format, Scalar, Space> [<Has $type Mut>]<Scalar> for $crate::StaticColor<{ CHANNELS }, Format, Scalar, Space>
+			where
+				Format: [<$type Component>]<Scalar>,
+			{
+				fn [<set_ $type:snake>](&mut self, [<$type:snake>]: Scalar) {
+					*<Format as [<$type Component>]<Scalar>>::component_mut(&mut self.color) = [<$type:snake>]
+				}
+			}
 		}
 	};
 }
@@ -61,8 +81,7 @@ macro_rules! declare_color_component {
 
 #[macro_export]
 macro_rules! declare_color_format {
-	($name:ident: $($channels:ty),+) => {
-
+	($name:ident: $($channels:ty),+) => {paste::paste!{
 		#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 		pub struct $name;
 
@@ -70,8 +89,19 @@ macro_rules! declare_color_format {
 			const CHANNELS: $crate::Channels = declare_color_format!(@count_channels $($channels,)*);
 		}
 
+		impl<From, Scalar> $crate::ColorFormatConversion<From, Scalar, {declare_color_format!(@count_channels $($channels,)*)}> for $name
+		where
+			From: $crate::ColorFormat $(+ [<$channels Component>]<Scalar>)+,
+		{
+			fn convert_slice(slice: &[Scalar]) -> [Scalar; declare_color_format!(@count_channels $($channels,)*)] {
+				[$(
+					<From as [<$channels Component>]<Scalar>>::component(slice),
+				)*]
+			}
+		}
+
 		declare_color_format!(@iter_channels 0, $name: $($channels,)+);
-	};
+	}};
 
 	(@iter_channels $index:expr, $name:ident: ) => {};
 

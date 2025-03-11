@@ -114,6 +114,33 @@ pub trait ColorComponents: Color {
 	fn to_array(&self) -> Self::Array;
 }
 
+pub trait ColorFormatConversion<From, Scalar, const CHANNELS: Channels> {
+	fn convert_slice(slice: &[Scalar]) -> [Scalar; CHANNELS];
+}
+
+pub trait ColorConversion<From, const CHANNELS: Channels> {
+	fn convert_from(color: From) -> Self;
+}
+
+impl<From, To, Scalar, Space, FormatTo, const CHANNELS: Channels> ColorConversion<From, { CHANNELS }> for To
+where
+	From: Color<Scalar = Scalar, Space = Space> + ColorComponents,
+	To: Color<Scalar = Scalar, Space = Space, Format = FormatTo> + ColorComponents<Array = [Scalar; CHANNELS]>,
+	FormatTo: ColorFormatConversion<From::Format, Scalar, { CHANNELS }>,
+{
+	fn convert_from(color: From) -> Self {
+		let array_in = color.to_array();
+		let array_out = To::Format::convert_slice(array_in.as_ref());
+		To::from_array(array_out)
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PixelView<'a, C: Color> {
 	pub slice: &'a [C::Scalar],

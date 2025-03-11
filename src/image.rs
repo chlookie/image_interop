@@ -7,8 +7,8 @@ use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
 use crate::{
-	Channels, Color, ColorComponents, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut, PixelView,
-	PixelViewMut,
+	Channels, Color, ColorComponents, ColorConversion, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut,
+	PixelView, PixelViewMut,
 };
 
 /*
@@ -94,6 +94,29 @@ impl<C: Color, B> Image<C, B> {
 		})
 	}
 
+	pub fn convert<C2, const CHANNELS: Channels>(mut self) -> Image<C2, B>
+	where
+		C: ColorComponents,
+		C2: Color<Scalar = C::Scalar> + ColorComponents + ColorConversion<C, { CHANNELS }>,
+		Self: ImageIterMut<Pixel = C>,
+	{
+		for pixel in self.iter_pixels_mut() {
+			let color_in = pixel.as_color();
+			let color_out = C2::convert_from(color_in);
+			for (dst, src) in pixel.slice.iter_mut().zip(color_out.to_array().as_ref()) {
+				*dst = *src
+			}
+
+			// C2::convert_mut_slice_from::<C>(pixel.slice);
+		}
+
+		Image {
+			buffer: self.buffer,
+			layout: self.layout,
+			_pixel: PhantomData,
+		}
+	}
+
 	pub fn layout(&self) -> ImageLayout {
 		self.layout
 	}
@@ -119,25 +142,6 @@ impl<C: Color, B> Image<C, B> {
 		let index = self.layout.index(x, y);
 		let samples = Self::CHANNELS as usize;
 		index..index + samples
-	}
-}
-
-impl<C, B> Image<C, B>
-where
-	C: Color,
-	Self: ImageIter<Pixel = C> + ImageView,
-{
-	pub fn to_packed(self) -> Image<C, Vec<<C as Color>::Scalar>>
-	where
-		C: ColorComponents,
-	{
-		let mut image_out: Image<C, Vec<<C as Color>::Scalar>> = Image::new(self.width(), self.height());
-
-		for (x, y, from) in self.enumerate_pixels() {
-			image_out.put_pixel_unchecked(x, y, from.as_color());
-		}
-
-		image_out
 	}
 }
 
