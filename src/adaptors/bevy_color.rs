@@ -1,6 +1,4 @@
-use bevy_color::{ColorToComponents, Hsla, Hsva, Hwba, Laba, Lcha, LinearRgba, Oklaba, Oklcha, Srgba, Xyza};
-
-use crate::{Pixel, PixelToComponents, components::*, declare_color_format};
+use crate::{Color, ColorComponents, components::*, declare_color_format};
 
 /*
 --------------------------------------------------------------------------------
@@ -16,59 +14,59 @@ declare_color_format!(LABA: Lightness, A, B, Alpha);
 declare_color_format!(LCHA: Lightness, Chroma, Hue, Alpha);
 declare_color_format!(XYZA: X, Y, Z, Alpha);
 
-impl Pixel for Srgba {
+impl Color for bevy_color::Srgba {
 	type Scalar = f32;
 	type Format = RGBA;
 }
 
-impl Pixel for LinearRgba {
+impl Color for bevy_color::LinearRgba {
 	type Scalar = f32;
 	type Format = RGBA;
 }
 
-impl Pixel for Hsla {
+impl Color for bevy_color::Hsla {
 	type Scalar = f32;
 	type Format = HSLA;
 }
 
-impl Pixel for Hsva {
+impl Color for bevy_color::Hsva {
 	type Scalar = f32;
 	type Format = HSVA;
 }
 
-impl Pixel for Hwba {
+impl Color for bevy_color::Hwba {
 	type Scalar = f32;
 	type Format = HWBA;
 }
 
-impl Pixel for Laba {
+impl Color for bevy_color::Laba {
 	type Scalar = f32;
 	type Format = LABA;
 }
 
-impl Pixel for Lcha {
+impl Color for bevy_color::Lcha {
 	type Scalar = f32;
 	type Format = LCHA;
 }
 
-impl Pixel for Oklaba {
+impl Color for bevy_color::Oklaba {
 	type Scalar = f32;
 	type Format = LABA;
 }
 
-impl Pixel for Oklcha {
+impl Color for bevy_color::Oklcha {
 	type Scalar = f32;
 	type Format = LCHA;
 }
 
-impl Pixel for Xyza {
+impl Color for bevy_color::Xyza {
 	type Scalar = f32;
 	type Format = XYZA;
 }
 
-impl<T> PixelToComponents for T
+impl<T> ColorComponents for T
 where
-	T: Pixel<Scalar = f32> + ColorToComponents,
+	T: Color<Scalar = f32> + bevy_color::ColorToComponents,
 {
 	type Tuple = (f32, f32, f32, f32);
 	type Array = [f32; 4];

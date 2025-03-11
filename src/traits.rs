@@ -54,17 +54,17 @@ macro_rules! check_channels {
 	($id:ident, $channels:expr) => {
 		ensure!(
 			$id.len() == $channels,
-			"Given slice doesn't match the number of channels for the pixel type"
+			"Given slice doesn't match the number of channels for the color type"
 		);
 	};
 }
 
-/// A generalized pixel.
-pub trait Pixel: Copy + Clone {
-	/// The scalar type that is used to store each channel in this pixel.
+/// A generalized color.
+pub trait Color: Copy + Clone {
+	/// The scalar type that is used to store each channel in this color.
 	type Scalar: ScalarPrimitive;
 
-	/// The format of the channels in this pixel. For example (Red, Green, Blue, Alpha) or (Hue, Saturation, Value)
+	/// The format that describes the color channels and their order in this color. For example (Red, Green, Blue, Alpha) or (Hue, Saturation, Value)
 	type Format: ColorFormat<Self::Scalar>;
 
 	const CHANNELS: Channels = Self::Format::CHANNELS;
@@ -86,7 +86,7 @@ pub trait Pixel: Copy + Clone {
 	}
 }
 
-pub trait PixelToComponents: Pixel {
+pub trait ColorComponents: Color {
 	type Tuple;
 	type Array: AsRef<[Self::Scalar]>;
 
@@ -110,63 +110,63 @@ pub trait PixelToComponents: Pixel {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct PixelView<'a, P: Pixel> {
-	pub slice: &'a [P::Scalar],
-	_format: PhantomData<P::Format>,
+pub struct PixelView<'a, C: Color> {
+	pub slice: &'a [C::Scalar],
+	_format: PhantomData<C::Format>,
 }
 
-impl<'a, P: Pixel> PixelView<'a, P> {
-	pub fn new(slice: &'a [P::Scalar]) -> Result<Self> {
-		check_channels!(slice, P::CHANNELS);
+impl<'a, C: Color> PixelView<'a, C> {
+	pub fn new(slice: &'a [C::Scalar]) -> Result<Self> {
+		check_channels!(slice, C::CHANNELS);
 		Ok(Self::new_unchecked(slice))
 	}
 
-	pub fn new_unchecked(slice: &'a [P::Scalar]) -> Self {
+	pub fn new_unchecked(slice: &'a [C::Scalar]) -> Self {
 		PixelView {
 			slice,
 			_format: PhantomData,
 		}
 	}
 
-	pub fn as_pixel(&self) -> P
+	pub fn as_color(&self) -> C
 	where
-		P: PixelToComponents,
+		C: ColorComponents,
 	{
-		P::from_slice_unchecked(self.slice)
+		C::from_slice_unchecked(self.slice)
 	}
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct PixelViewMut<'a, P: Pixel> {
-	pub slice: &'a mut [P::Scalar],
-	_format: PhantomData<P::Format>,
+pub struct PixelViewMut<'a, C: Color> {
+	pub slice: &'a mut [C::Scalar],
+	_format: PhantomData<C::Format>,
 }
 
-impl<'a, P: Pixel> PixelViewMut<'a, P> {
-	pub fn new(slice: &'a mut [P::Scalar]) -> Result<Self> {
-		check_channels!(slice, P::Format::CHANNELS);
+impl<'a, C: Color> PixelViewMut<'a, C> {
+	pub fn new(slice: &'a mut [C::Scalar]) -> Result<Self> {
+		check_channels!(slice, C::Format::CHANNELS);
 		Ok(Self::new_unchecked(slice))
 	}
 
-	pub fn new_unchecked(slice: &'a mut [P::Scalar]) -> Self {
+	pub fn new_unchecked(slice: &'a mut [C::Scalar]) -> Self {
 		PixelViewMut {
 			slice,
 			_format: PhantomData,
 		}
 	}
 
-	pub fn as_pixel(&self) -> P
+	pub fn as_color(&self) -> C
 	where
-		P: PixelToComponents,
+		C: ColorComponents,
 	{
-		P::from_slice_unchecked(self.slice)
+		C::from_slice_unchecked(self.slice)
 	}
 
-	pub fn set_pixel(&mut self, pixel: P)
+	pub fn set_color(&mut self, color: C)
 	where
-		P: PixelToComponents,
+		C: ColorComponents,
 	{
-		self.slice.copy_from_slice(pixel.to_array().as_ref());
+		self.slice.copy_from_slice(color.to_array().as_ref());
 	}
 }
 
@@ -178,8 +178,8 @@ impl<'a, P: Pixel> PixelViewMut<'a, P> {
 
 /// Trait to inspect an image.
 pub trait ImageView {
-	/// The type of pixel.
-	type Pixel: Pixel;
+	/// The type of each pixel in the image.
+	type Pixel: Color;
 
 	/// Returns the number of channels the color format of the image has.
 	fn channels(&self) -> Channels {
@@ -265,8 +265,8 @@ pub trait ImageViewMut: ImageView {
 */
 
 pub trait ImageIter {
-	/// The type of pixel.
-	type Pixel: Pixel;
+	/// The type of each pixel in the image.
+	type Pixel: Color;
 
 	/// Returns an iterator over the pixels of the image.
 	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<Self::Pixel>>;
@@ -276,8 +276,8 @@ pub trait ImageIter {
 }
 
 pub trait ImageIterMut {
-	/// The type of pixel.
-	type Pixel: Pixel;
+	/// The type of each pixel in the image.
+	type Pixel: Color;
 
 	/// Returns an iterator over the pixels of the image.
 	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<Self::Pixel>>;
@@ -293,8 +293,8 @@ mod par_iter {
 	use super::*;
 
 	pub trait ImageParallelIter {
-		/// The type of pixel.
-		type Pixel: Pixel;
+		/// The type of each pixel in the image.
+		type Pixel: Color;
 
 		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
 		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<Self::Pixel>>;
@@ -304,8 +304,8 @@ mod par_iter {
 	}
 
 	pub trait ImageParallelIterMut {
-		/// The type of pixel.
-		type Pixel: Pixel;
+		/// The type of each pixel in the image.
+		type Pixel: Color;
 
 		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
 		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<Self::Pixel>>;

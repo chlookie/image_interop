@@ -21,32 +21,32 @@ macro_rules! declare_color_component {
 			}
 
 			#[allow(dead_code)]
-			impl<'a, P: $crate::Pixel> [<Has $type>]<P::Scalar> for $crate::PixelView<'a, P>
+			impl<'a, C: $crate::Color> [<Has $type>]<C::Scalar> for $crate::PixelView<'a, C>
 			where
-				P::Format: [<$type Component>]<P::Scalar>,
+				C::Format: [<$type Component>]<C::Scalar>,
 			{
-				fn [<$type:snake>](&self) -> P::Scalar {
-					<P::Format as [<$type Component>]<P::Scalar>>::component(self.slice)
+				fn [<$type:snake>](&self) -> C::Scalar {
+					<C::Format as [<$type Component>]<C::Scalar>>::component(self.slice)
 				}
 			}
 
 			#[allow(dead_code)]
-			impl<'a, P: $crate::Pixel> [<Has $type>]<P::Scalar> for $crate::PixelViewMut<'a, P>
+			impl<'a, C: $crate::Color> [<Has $type>]<C::Scalar> for $crate::PixelViewMut<'a, C>
 			where
-				P::Format: [<$type Component>]<P::Scalar>,
+				C::Format: [<$type Component>]<C::Scalar>,
 			{
-				fn [<$type:snake>](&self) -> P::Scalar {
-					<P::Format as [<$type Component>]<P::Scalar>>::component(self.slice)
+				fn [<$type:snake>](&self) -> C::Scalar {
+					<C::Format as [<$type Component>]<C::Scalar>>::component(self.slice)
 				}
 			}
 
 			#[allow(dead_code)]
-			impl<'a, P: $crate::Pixel> [<Has $type Mut>]<P::Scalar> for $crate::PixelViewMut<'a, P>
+			impl<'a, C: $crate::Color> [<Has $type Mut>]<C::Scalar> for $crate::PixelViewMut<'a, C>
 			where
-				P::Format: [<$type Component>]<P::Scalar>,
+				C::Format: [<$type Component>]<C::Scalar>,
 			{
-				fn [<set_ $type:snake>](&mut self, [<$type:snake>]: P::Scalar) {
-					*<P::Format as [<$type Component>]<P::Scalar>>::component_mut(self.slice) = [<$type:snake>]
+				fn [<set_ $type:snake>](&mut self, [<$type:snake>]: C::Scalar) {
+					*<C::Format as [<$type Component>]<C::Scalar>>::component_mut(self.slice) = [<$type:snake>]
 				}
 			}
 		}

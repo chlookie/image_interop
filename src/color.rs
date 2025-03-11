@@ -1,6 +1,6 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use crate::{Channels, ColorFormat, Pixel, PixelToComponents, ScalarPrimitive};
+use crate::{Channels, Color, ColorComponents, ColorFormat, ScalarPrimitive};
 
 /*
 --------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ where
 	}
 }
 
-impl<const CHANNELS: Channels, Format, Scalar> Pixel for GenericColor<{ CHANNELS }, Format, Scalar>
+impl<const CHANNELS: Channels, Format, Scalar> Color for GenericColor<{ CHANNELS }, Format, Scalar>
 where
 	Scalar: ScalarPrimitive,
 	Format: Copy + ColorFormat<Scalar>,
@@ -63,9 +63,9 @@ where
 	type Format = Format;
 }
 
-macro_rules! impl_pixel_to_components_for_generic_color {
+macro_rules! impl_color_components_for_generic_color {
 	($channels:expr, $tuple:ty) => {
-		impl<Format, Scalar> PixelToComponents for GenericColor<{ $channels }, Format, Scalar>
+		impl<Format, Scalar> ColorComponents for GenericColor<{ $channels }, Format, Scalar>
 		where
 			Scalar: ScalarPrimitive,
 			Format: Copy + ColorFormat<Scalar>,
@@ -99,15 +99,15 @@ macro_rules! impl_pixel_to_components_for_generic_color {
 	};
 }
 
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(1,  (Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(2,  (Scalar, Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(3,  (Scalar, Scalar, Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(4,  (Scalar, Scalar, Scalar, Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(5,  (Scalar, Scalar, Scalar, Scalar, Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(6,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(7,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(8,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(9,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(10, (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(11, (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,Scalar,Scalar,));
-#[rustfmt::skip] impl_pixel_to_components_for_generic_color!(12, (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,Scalar,Scalar,Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(1,  (Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(2,  (Scalar, Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(3,  (Scalar, Scalar, Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(4,  (Scalar, Scalar, Scalar, Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(5,  (Scalar, Scalar, Scalar, Scalar, Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(6,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(7,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(8,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(9,  (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(10, (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(11, (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,Scalar,Scalar,));
+#[rustfmt::skip] impl_color_components_for_generic_color!(12, (Scalar, Scalar, Scalar, Scalar, Scalar, Scalar,Scalar,Scalar,Scalar,Scalar,Scalar,Scalar,));

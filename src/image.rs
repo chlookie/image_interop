@@ -7,7 +7,7 @@ use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
 use crate::{
-	Channels, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut, Pixel, PixelToComponents, PixelView,
+	Channels, Color, ColorComponents, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut, PixelView,
 	PixelViewMut,
 };
 
@@ -17,51 +17,8 @@ use crate::{
 --------------------------------------------------------------------------------
 */
 
-/*
---------------------------------------------------------------------------------
-||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
---------------------------------------------------------------------------------
-*/
-
-/// A generic image container that can store pixels of any type that implements the [`Pixel`] trait.
-/// The image data can be stored in any buffer type that implements the necessary traits (typically [`Vec`]).
-///
-/// The image supports both row-major and column-major layouts, with configurable strides for both
-/// dimensions. This allows for efficient representation of sub-images and different memory layouts.
-///
-/// # Type Parameters
-///
-/// * `P`: The pixel type, which must implement the [`Pixel`] trait
-/// * `Buffer`: The underlying buffer type, defaults to `Vec<<P as Pixel>::Scalar>`
-///
-/// # Examples
-///
-/// ```
-/// use image_interop::{Image, Rgb};
-///
-/// // Create a new 800x600 RGB image
-/// let mut image: Image<Rgb> = Image::new(800, 600);
-///
-/// // Access pixels
-/// image.put_pixel(0, 0, Rgb::new(255, 0, 0)); // Set first pixel to red
-///
-/// // Iterate over all pixels
-/// for (x, y, pixel) in image.enumerate_pixels() {
-///     // Process each pixel
-/// }
-/// ```
-///
-/// The image can also be created from existing data:
-///
-/// ```
-/// use image_interop::{Image, ImageLayout, Rgb};
-///
-/// let buffer = vec![0u8; 800 * 600 * 3];
-/// let layout = ImageLayout::row_major_packed(3, 800, 600);
-/// let image = Image::<Rgb, _>::from_buffer(buffer, layout).unwrap();
-/// ```
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>> {
+pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>> {
 	/// The backing buffer of the image, which contains the actual samples.
 	pub(crate) buffer: Buffer,
 
@@ -69,14 +26,14 @@ pub struct Image<P: Pixel, Buffer = Vec<<P as Pixel>::Scalar>> {
 	pub(crate) layout: ImageLayout,
 
 	/// Some PhatomData for our generic types
-	_pixel: PhantomData<P>,
+	_pixel: PhantomData<C>,
 }
 
-impl<P: Pixel> Image<P, Vec<P::Scalar>> {
+impl<C: Color> Image<C, Vec<C::Scalar>> {
 	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
 	pub fn new(width: u32, height: u32) -> Self {
 		let layout = ImageLayout::row_major_packed(Self::CHANNELS, width, height);
-		let buffer = vec![P::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
+		let buffer = vec![C::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
 
 		// Sanity check that the layout is well-formed
 		debug_assert!(
@@ -97,29 +54,29 @@ impl<P: Pixel> Image<P, Vec<P::Scalar>> {
 		}
 	}
 
-	pub fn from_bytes<B>(bytes: B, layout: ImageLayout) -> Result<Self>
+	pub fn from_bytes<Bytes>(bytes: Bytes, layout: ImageLayout) -> Result<Self>
 	where
-		B: Deref<Target = [u8]>,
-		P::Scalar: FromBytes<Bytes = [u8]>,
+		Bytes: Deref<Target = [u8]>,
+		C::Scalar: FromBytes<Bytes = [u8]>,
 	{
 		let scalar_buffer = bytes
-			.chunks_exact(std::mem::size_of::<P::Scalar>() as usize)
+			.chunks_exact(std::mem::size_of::<C::Scalar>() as usize)
 			.map(TryInto::try_into)
 			.map(Result::unwrap)
-			.map(P::Scalar::from_ne_bytes)
-			.collect::<Vec<P::Scalar>>();
+			.map(C::Scalar::from_ne_bytes)
+			.collect::<Vec<C::Scalar>>();
 
 		Self::from_buffer(scalar_buffer, layout)
 	}
 }
 
-impl<Buffer, P: Pixel> Image<P, Buffer> {
-	pub const CHANNELS: Channels = P::CHANNELS;
+impl<C: Color, B> Image<C, B> {
+	pub const CHANNELS: Channels = C::CHANNELS;
 
 	/// Creates a new [`Image`] instance given a backing buffer and an [`ImageLayout`].
-	pub fn from_buffer(buffer: Buffer, layout: ImageLayout) -> Result<Self>
+	pub fn from_buffer(buffer: B, layout: ImageLayout) -> Result<Self>
 	where
-		Buffer: Deref<Target = [P::Scalar]>,
+		B: Deref<Target = [C::Scalar]>,
 	{
 		// Check that the layout is well-formed
 		ensure!(layout.is_well_formed(), "The given layout is malformed.");
@@ -141,11 +98,11 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 		self.layout
 	}
 
-	pub fn buffer(&self) -> &Buffer {
+	pub fn buffer(&self) -> &B {
 		&self.buffer
 	}
 
-	pub fn into_buffer(self) -> Buffer {
+	pub fn into_buffer(self) -> B {
 		self.buffer
 	}
 
@@ -165,19 +122,19 @@ impl<Buffer, P: Pixel> Image<P, Buffer> {
 	}
 }
 
-impl<Buffer, P> Image<P, Buffer>
+impl<C, B> Image<C, B>
 where
-	P: Pixel,
-	Self: ImageIter<Pixel = P> + ImageView,
+	C: Color,
+	Self: ImageIter<Pixel = C> + ImageView,
 {
-	pub fn to_packed(self) -> Image<P, Vec<<P as Pixel>::Scalar>>
+	pub fn to_packed(self) -> Image<C, Vec<<C as Color>::Scalar>>
 	where
-		P: PixelToComponents,
+		C: ColorComponents,
 	{
-		let mut image_out: Image<P, Vec<<P as Pixel>::Scalar>> = Image::new(self.width(), self.height());
+		let mut image_out: Image<C, Vec<<C as Color>::Scalar>> = Image::new(self.width(), self.height());
 
 		for (x, y, from) in self.enumerate_pixels() {
-			image_out.put_pixel_unchecked(x, y, from.as_pixel());
+			image_out.put_pixel_unchecked(x, y, from.as_color());
 		}
 
 		image_out
@@ -190,12 +147,12 @@ where
 --------------------------------------------------------------------------------
 */
 
-impl<Buffer, P> ImageView for Image<P, Buffer>
+impl<C, B> ImageView for Image<C, B>
 where
-	P: Pixel + PixelToComponents,
-	Buffer: Deref<Target = [P::Scalar]>,
+	C: Color + ColorComponents,
+	B: Deref<Target = [C::Scalar]>,
 {
-	type Pixel = P;
+	type Pixel = C;
 
 	fn dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
@@ -206,14 +163,14 @@ where
 		let range = self.pixel_range(x, y);
 		let pixel_slice = &self.buffer[range];
 
-		P::from_slice_unchecked(pixel_slice)
+		C::from_slice_unchecked(pixel_slice)
 	}
 }
 
-impl<Buffer, P> ImageViewMut for Image<P, Buffer>
+impl<C, B> ImageViewMut for Image<C, B>
 where
-	P: Pixel + PixelToComponents,
-	Buffer: DerefMut<Target = [P::Scalar]>,
+	C: Color + ColorComponents,
+	B: DerefMut<Target = [C::Scalar]>,
 {
 	fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) -> Result<()> {
 		let range = self.pixel_range(x, y);
@@ -241,15 +198,15 @@ where
 --------------------------------------------------------------------------------
 */
 
-impl<P, Buffer> ImageIter for Image<P, Buffer>
+impl<C, B> ImageIter for Image<C, B>
 where
-	P: Pixel,
-	Buffer: Deref<Target = [P::Scalar]>,
+	C: Color,
+	B: Deref<Target = [C::Scalar]>,
 {
-	type Pixel = P;
+	type Pixel = C;
 
 	/// Returns an iterator over the pixels of the image.
-	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<P>> {
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<C>> {
 		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -260,13 +217,13 @@ where
 
 			chunk.chunks_exact(minor_stride as usize).map(move |padded_pixel| {
 				let slice = &padded_pixel[..Self::CHANNELS];
-				P::as_view_unchecked(slice)
+				C::as_view_unchecked(slice)
 			})
 		})
 	}
 
 	/// Returns an iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
-	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<P>)> {
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<C>)> {
 		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -288,7 +245,7 @@ where
 							(major_index, minor_index)
 						};
 						let slice = &padded_pixel[..Self::CHANNELS];
-						let pixel = P::as_view_unchecked(slice);
+						let pixel = C::as_view_unchecked(slice);
 
 						(x as u32, y as u32, pixel)
 					})
@@ -296,15 +253,15 @@ where
 	}
 }
 
-impl<P, Buffer> ImageIterMut for Image<P, Buffer>
+impl<C, B> ImageIterMut for Image<C, B>
 where
-	P: Pixel,
-	Buffer: DerefMut<Target = [P::Scalar]>,
+	C: Color,
+	B: DerefMut<Target = [C::Scalar]>,
 {
-	type Pixel = P;
+	type Pixel = C;
 
 	/// Returns an iterator over the mutable pixels of the image, usable with `rayon`.
-	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<P>> {
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<C>> {
 		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -317,13 +274,13 @@ where
 
 				chunk.chunks_exact_mut(minor_stride).map(move |padded_pixel| {
 					let slice = &mut padded_pixel[..Self::CHANNELS];
-					P::as_view_mut_unchecked(slice)
+					C::as_view_mut_unchecked(slice)
 				})
 			})
 	}
 
 	/// Returns an iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
-	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<P>)> {
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<C>)> {
 		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -345,7 +302,7 @@ where
 							(major_index, minor_index)
 						};
 						let slice = &mut padded_pixel[..Self::CHANNELS];
-						let pixel = P::as_view_mut_unchecked(slice);
+						let pixel = C::as_view_mut_unchecked(slice);
 
 						(x as u32, y as u32, pixel)
 					})
@@ -370,17 +327,17 @@ mod par_iter {
 
 	use super::*;
 
-	impl<P, Buffer> ImageParallelIter for Image<P, Buffer>
+	impl<C, B> ImageParallelIter for Image<C, B>
 	where
-		P: Pixel + Sync,
-		P::Scalar: Sync,
-		P::Format: Sync + Send,
-		Buffer: Deref<Target = [P::Scalar]> + Sync,
+		C: Color + Sync,
+		C::Scalar: Sync,
+		C::Format: Sync + Send,
+		B: Deref<Target = [C::Scalar]> + Sync,
 	{
-		type Pixel = P;
+		type Pixel = C;
 
 		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
-		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<P>> {
+		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<C>> {
 			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -393,13 +350,13 @@ mod par_iter {
 
 					chunk.par_chunks_exact(minor_stride).map(move |padded_pixel| {
 						let slice = &padded_pixel[..Self::CHANNELS];
-						P::as_view_unchecked(slice)
+						C::as_view_unchecked(slice)
 					})
 				})
 		}
 
 		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
-		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<P>)> {
+		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<C>)> {
 			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -421,7 +378,7 @@ mod par_iter {
 								(major_index, minor_index)
 							};
 							let slice = &padded_pixel[..Self::CHANNELS];
-							let pixel = P::as_view_unchecked(slice);
+							let pixel = C::as_view_unchecked(slice);
 
 							(x as u32, y as u32, pixel)
 						})
@@ -430,17 +387,17 @@ mod par_iter {
 	}
 
 	#[cfg(feature = "rayon")]
-	impl<P, Buffer> ImageParallelIterMut for Image<P, Buffer>
+	impl<C, B> ImageParallelIterMut for Image<C, B>
 	where
-		P: Pixel + Send + Sync,
-		P::Scalar: Send + Sync,
-		P::Format: Send + Sync,
-		Buffer: DerefMut<Target = [P::Scalar]> + Send + Sync,
+		C: Color + Send + Sync,
+		C::Scalar: Send + Sync,
+		C::Format: Send + Sync,
+		B: DerefMut<Target = [C::Scalar]> + Send + Sync,
 	{
-		type Pixel = P;
+		type Pixel = C;
 
 		/// Returns a parallel iterator over the mutable pixels of the image, usable with `rayon`.
-		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<P>> {
+		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<C>> {
 			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -453,13 +410,13 @@ mod par_iter {
 
 					chunk.par_chunks_exact_mut(minor_stride).map(move |padded_pixel| {
 						let slice = &mut padded_pixel[..Self::CHANNELS];
-						P::as_view_mut_unchecked(slice)
+						C::as_view_mut_unchecked(slice)
 					})
 				})
 		}
 
 		/// Returns a parallel iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
-		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<P>)> {
+		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<C>)> {
 			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides().unwrap();
@@ -481,7 +438,7 @@ mod par_iter {
 								(major_index, minor_index)
 							};
 							let slice = &mut padded_pixel[..Self::CHANNELS];
-							let pixel = P::as_view_mut_unchecked(slice);
+							let pixel = C::as_view_mut_unchecked(slice);
 
 							(x as u32, y as u32, pixel)
 						})
