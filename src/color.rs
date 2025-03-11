@@ -29,6 +29,26 @@ pub mod components {
 	declare_color_component!(Z);
 }
 
+pub mod formats {
+	use crate::declare_color_format;
+
+	declare_color_format!(RGB: Red, Green, Blue);
+	declare_color_format!(HSL: Hue, Saturation, Lightness);
+	declare_color_format!(HSV: Hue, Saturation, Value);
+	declare_color_format!(HWB: Hue, Whiteness, Blackness);
+	declare_color_format!(LAB: Lightness, A, B);
+	declare_color_format!(LCH: Lightness, Chroma, Hue);
+	declare_color_format!(XYZ: X, Y, Z);
+
+	declare_color_format!(RGBA: Red, Green, Blue, Alpha);
+	declare_color_format!(HSLA: Hue, Saturation, Lightness, Alpha);
+	declare_color_format!(HSVA: Hue, Saturation, Value, Alpha);
+	declare_color_format!(HWBA: Hue, Whiteness, Blackness, Alpha);
+	declare_color_format!(LABA: Lightness, A, B, Alpha);
+	declare_color_format!(LCHA: Lightness, Chroma, Hue, Alpha);
+	declare_color_format!(XYZA: X, Y, Z, Alpha);
+}
+
 pub mod spaces {
 	use crate::declare_color_space;
 

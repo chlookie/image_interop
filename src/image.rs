@@ -94,10 +94,10 @@ impl<C: Color, B> Image<C, B> {
 		})
 	}
 
-	pub fn convert<C2, const CHANNELS: Channels>(mut self) -> Image<C2, B>
+	pub fn convert<C2>(mut self) -> Image<C2, B>
 	where
 		C: ColorComponents,
-		C2: Color<Scalar = C::Scalar> + ColorComponents + ColorConversion<C, { CHANNELS }>,
+		C2: Color<Scalar = C::Scalar> + ColorComponents + ColorConversion<C>,
 		Self: ImageIterMut<Pixel = C>,
 	{
 		for pixel in self.iter_pixels_mut() {
@@ -106,8 +106,6 @@ impl<C: Color, B> Image<C, B> {
 			for (dst, src) in pixel.slice.iter_mut().zip(color_out.to_array().as_ref()) {
 				*dst = *src
 			}
-
-			// C2::convert_mut_slice_from::<C>(pixel.slice);
 		}
 
 		Image {

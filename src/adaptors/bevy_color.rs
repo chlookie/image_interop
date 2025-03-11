@@ -1,4 +1,4 @@
-use crate::{Color, ColorComponents, components::*, declare_color_format, spaces::*};
+use crate::{Color, ColorComponents, formats, spaces};
 
 /*
 --------------------------------------------------------------------------------
@@ -6,72 +6,64 @@ use crate::{Color, ColorComponents, components::*, declare_color_format, spaces:
 --------------------------------------------------------------------------------
 */
 
-declare_color_format!(RGBA: Red, Green, Blue, Alpha);
-declare_color_format!(HSLA: Hue, Saturation, Lightness, Alpha);
-declare_color_format!(HSVA: Hue, Saturation, Value, Alpha);
-declare_color_format!(HWBA: Hue, Whiteness, Blackness, Alpha);
-declare_color_format!(LABA: Lightness, A, B, Alpha);
-declare_color_format!(LCHA: Lightness, Chroma, Hue, Alpha);
-declare_color_format!(XYZA: X, Y, Z, Alpha);
-
 impl Color for bevy_color::Srgba {
 	type Scalar = f32;
-	type Format = RGBA;
-	type Space = SRGB;
+	type Format = formats::RGBA;
+	type Space = spaces::SRGB;
 }
 
 impl Color for bevy_color::LinearRgba {
 	type Scalar = f32;
-	type Format = RGBA;
-	type Space = LinearRGB;
+	type Format = formats::RGBA;
+	type Space = spaces::LinearRGB;
 }
 
 impl Color for bevy_color::Hsla {
 	type Scalar = f32;
-	type Format = HSLA;
-	type Space = HSL;
+	type Format = formats::HSLA;
+	type Space = spaces::HSL;
 }
 
 impl Color for bevy_color::Hsva {
 	type Scalar = f32;
-	type Format = HSVA;
-	type Space = HSV;
+	type Format = formats::HSVA;
+	type Space = spaces::HSV;
 }
 
 impl Color for bevy_color::Hwba {
 	type Scalar = f32;
-	type Format = HWBA;
-	type Space = HWB;
+	type Format = formats::HWBA;
+	type Space = spaces::HWB;
 }
 
 impl Color for bevy_color::Laba {
 	type Scalar = f32;
-	type Format = LABA;
-	type Space = CieLab;
+	type Format = formats::LABA;
+	type Space = spaces::CieLab;
 }
 
 impl Color for bevy_color::Lcha {
 	type Scalar = f32;
-	type Format = LCHA;
-	type Space = CieLCh;
+	type Format = formats::LCHA;
+	type Space = spaces::CieLCh;
 }
 
 impl Color for bevy_color::Oklaba {
 	type Scalar = f32;
-	type Format = LABA;
-	type Space = OkLab;
+	type Format = formats::LABA;
+	type Space = spaces::OkLab;
 }
 
 impl Color for bevy_color::Oklcha {
 	type Scalar = f32;
-	type Format = LCHA;
-	type Space = OkLCh;
+	type Format = formats::LCHA;
+	type Space = spaces::OkLCh;
 }
 
 impl Color for bevy_color::Xyza {
 	type Scalar = f32;
-	type Format = XYZA;
-	type Space = CieXYZD65;
+	type Format = formats::XYZA;
+	type Space = spaces::CieXYZD65;
 }
 
 impl<T> ColorComponents for T

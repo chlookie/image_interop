@@ -118,11 +118,11 @@ pub trait ColorFormatConversion<From, Scalar, const CHANNELS: Channels> {
 	fn convert_slice(slice: &[Scalar]) -> [Scalar; CHANNELS];
 }
 
-pub trait ColorConversion<From, const CHANNELS: Channels> {
+pub trait ColorConversion<From> {
 	fn convert_from(color: From) -> Self;
 }
 
-impl<From, To, Scalar, Space, FormatTo, const CHANNELS: Channels> ColorConversion<From, { CHANNELS }> for To
+impl<From, To, Scalar, Space, FormatTo, const CHANNELS: Channels> ColorConversion<From> for To
 where
 	From: Color<Scalar = Scalar, Space = Space> + ColorComponents,
 	To: Color<Scalar = Scalar, Space = Space, Format = FormatTo> + ColorComponents<Array = [Scalar; CHANNELS]>,
