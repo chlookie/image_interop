@@ -6,10 +6,6 @@ use crate::{Color, ColorComponents, ColorConversion, formats, spaces};
 --------------------------------------------------------------------------------
 */
 
-mod sealed {
-	pub trait BevyColor {}
-}
-
 impl Color for bevy_color::Srgba {
 	type Scalar = f32;
 	type Format = formats::RGBA;
@@ -70,44 +66,46 @@ impl Color for bevy_color::Xyza {
 	type Space = spaces::CieXYZD65;
 }
 
-impl sealed::BevyColor for bevy_color::Srgba {}
-impl sealed::BevyColor for bevy_color::LinearRgba {}
-impl sealed::BevyColor for bevy_color::Hsla {}
-impl sealed::BevyColor for bevy_color::Hsva {}
-impl sealed::BevyColor for bevy_color::Hwba {}
-impl sealed::BevyColor for bevy_color::Laba {}
-impl sealed::BevyColor for bevy_color::Lcha {}
-impl sealed::BevyColor for bevy_color::Oklaba {}
-impl sealed::BevyColor for bevy_color::Oklcha {}
-impl sealed::BevyColor for bevy_color::Xyza {}
+use bevy_color::ColorToComponents;
+macro_rules! impl_color_components {
+	($type:ty) => {
+		impl ColorComponents for $type {
+			type Tuple = (f32, f32, f32, f32);
+			type Array = [f32; 4];
 
-impl<T> ColorComponents for T
-where
-	T: sealed::BevyColor + Color<Scalar = f32> + bevy_color::ColorToComponents,
-{
-	type Tuple = (f32, f32, f32, f32);
-	type Array = [f32; 4];
+			fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
+				Self::from_array(slice.try_into().unwrap())
+			}
 
-	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
-		Self::from_array(slice.try_into().unwrap())
-	}
+			fn from_tuple(tuple: Self::Tuple) -> Self {
+				Self::from_array(tuple.into())
+			}
 
-	fn from_tuple(tuple: Self::Tuple) -> Self {
-		Self::from_array(tuple.into())
-	}
+			fn to_tuple(&self) -> Self::Tuple {
+				self.to_array().into()
+			}
 
-	fn to_tuple(&self) -> Self::Tuple {
-		self.to_array().into()
-	}
+			fn from_array(array: Self::Array) -> Self {
+				Self::from_f32_array(array)
+			}
 
-	fn from_array(array: Self::Array) -> Self {
-		Self::from_f32_array(array)
-	}
-
-	fn to_array(&self) -> Self::Array {
-		self.to_f32_array()
-	}
+			fn to_array(&self) -> Self::Array {
+				self.to_f32_array()
+			}
+		}
+	};
 }
+
+impl_color_components!(bevy_color::Srgba);
+impl_color_components!(bevy_color::LinearRgba);
+impl_color_components!(bevy_color::Hsla);
+impl_color_components!(bevy_color::Hsva);
+impl_color_components!(bevy_color::Hwba);
+impl_color_components!(bevy_color::Laba);
+impl_color_components!(bevy_color::Lcha);
+impl_color_components!(bevy_color::Oklaba);
+impl_color_components!(bevy_color::Oklcha);
+impl_color_components!(bevy_color::Xyza);
 
 #[rustfmt::skip] impl ColorConversion<bevy_color::LinearRgba> for bevy_color::Srgba      { fn convert_from(color: bevy_color::LinearRgba) -> Self { Self::from(color) } }
 #[rustfmt::skip] impl ColorConversion<bevy_color::Hsla>       for bevy_color::Srgba      { fn convert_from(color: bevy_color::Hsla)       -> Self { Self::from(color) } }

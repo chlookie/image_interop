@@ -1,5 +1,3 @@
-use image::Rgb;
-
 use crate::{Color, ColorComponents, ScalarPrimitive, formats, spaces};
 
 /*
