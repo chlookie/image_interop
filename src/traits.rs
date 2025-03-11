@@ -42,7 +42,7 @@ pub trait ColorComponent {}
 
 pub trait ColorSpace {}
 
-pub trait StaticColorFormat<S: ScalarPrimitive> {
+pub trait ColorFormat {
 	const CHANNELS: Channels;
 }
 
@@ -67,7 +67,7 @@ pub trait Color: Copy + Clone {
 	type Scalar: ScalarPrimitive;
 
 	/// The format that describes the color channels and their order in this color. For example (Red, Green, Blue, Alpha) or (Hue, Saturation, Value)
-	type Format: StaticColorFormat<Self::Scalar>;
+	type Format: ColorFormat;
 
 	/// The color space in which the color is defined in. Colors in the same color space can be trivially converted to- and from by interchanging their respective components as defined in the color [`Color::Format`].
 	type Space: ColorSpace;

@@ -1,6 +1,6 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use crate::{Channels, Color, ColorComponents, ColorSpace, ScalarPrimitive, StaticColorFormat};
+use crate::{Channels, Color, ColorComponents, ColorFormat, ColorSpace, ScalarPrimitive};
 
 /*
 --------------------------------------------------------------------------------
@@ -79,7 +79,7 @@ where
 impl<const CHANNELS: Channels, Format, Scalar, Space> Color for StaticColor<{ CHANNELS }, Format, Scalar, Space>
 where
 	Scalar: ScalarPrimitive,
-	Format: Copy + StaticColorFormat<Scalar>,
+	Format: Copy + ColorFormat,
 	Space: Copy + ColorSpace,
 {
 	type Scalar = Scalar;
@@ -92,7 +92,7 @@ macro_rules! impl_color_components_for_generic_color {
 		impl<Format, Scalar, Space> ColorComponents for StaticColor<{ $channels }, Format, Scalar, Space>
 		where
 			Scalar: ScalarPrimitive,
-			Format: Copy + StaticColorFormat<Scalar>,
+			Format: Copy + ColorFormat,
 			Space: Copy + ColorSpace,
 		{
 			type Tuple = $tuple;
