@@ -1,5 +1,6 @@
 use std::{
 	marker::PhantomData,
+	mem::{self, ManuallyDrop},
 	ops::{Deref, DerefMut, Range},
 };
 
@@ -7,8 +8,8 @@ use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
 use crate::{
-	Channels, Color, ColorComponents, ConvertColorFrom, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut,
-	PixelView, PixelViewMut,
+	AssumedLinear, AssumedSrgb, Channels, Color, ColorComponents, ConvertColorFrom, ImageIter, ImageIterMut,
+	ImageLayout, ImageView, ImageViewMut, PixelView, PixelViewMut, spaces,
 };
 
 /*
@@ -17,6 +18,7 @@ use crate::{
 --------------------------------------------------------------------------------
 */
 
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>> {
 	/// The backing buffer of the image, which contains the actual samples.
@@ -26,7 +28,7 @@ pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>> {
 	pub(crate) layout: ImageLayout,
 
 	/// Some PhatomData for our generic types
-	_pixel: PhantomData<C>,
+	_color: PhantomData<C>,
 }
 
 impl<C: Color> Image<C, Vec<C::Scalar>> {
@@ -50,7 +52,7 @@ impl<C: Color> Image<C, Vec<C::Scalar>> {
 		Self {
 			buffer,
 			layout,
-			_pixel: PhantomData,
+			_color: PhantomData,
 		}
 	}
 
@@ -90,7 +92,7 @@ impl<C: Color, B> Image<C, B> {
 		Ok(Self {
 			buffer,
 			layout,
-			_pixel: PhantomData,
+			_color: PhantomData,
 		})
 	}
 
@@ -111,7 +113,7 @@ impl<C: Color, B> Image<C, B> {
 		Image {
 			buffer: self.buffer,
 			layout: self.layout,
-			_pixel: PhantomData,
+			_color: PhantomData,
 		}
 	}
 
@@ -134,6 +136,34 @@ impl<C: Color, B> Image<C, B> {
 	pub fn expected_total_samples(layout: ImageLayout) -> usize {
 		// Layout is checked for well-formed-ness at image construction
 		layout.total_padded_pixels().unwrap() * Self::CHANNELS
+	}
+
+	pub fn assume_linear_rgb(self) -> Image<AssumedLinear<C>, B>
+	where
+		C: Color<Space = spaces::UnknownRGB>,
+	{
+		assert!(mem::size_of::<Self>() == mem::size_of::<Image<AssumedLinear<C>, B>>());
+
+		// SAFETY:
+		// - Image is repr(C) *just in case* ZSTs (i.e. the PhatomData<C> field) were to change the struct representation.
+		// - AssumedLinear<T> is repr(transparent) as it is a direct wrapper over T, only for type-checking sake; and so semantically it also makes sense to bit-cast all of our pixels 1-to-1.
+		// - Self (Image<C, B>) and Image<AssumedLinear<C>, B> have the same size, guaranteed by the assertion.
+		// - mem::transmute_copy is used instead of mem::transmute because the compiler can't tell our generic types have the same size.
+		unsafe { std::mem::transmute_copy(&ManuallyDrop::new(self)) }
+	}
+
+	pub fn assume_srgb(self) -> Image<AssumedSrgb<C>, B>
+	where
+		C: Color<Space = spaces::UnknownRGB>,
+	{
+		assert!(mem::size_of::<Self>() == mem::size_of::<Image<AssumedSrgb<C>, B>>());
+
+		// SAFETY:
+		// - Image is repr(C) *just in case* ZSTs (i.e. the PhatomData<C> field) were to change the struct representation.
+		// - AssumedSrgb<T> is repr(transparent) as it is a direct wrapper over T, only for type-checking sake; and so semantically it also makes sense to bit-cast all of our pixels 1-to-1.
+		// - Self (Image<C, B>) and Image<AssumedSrgb<C>, B> have the same size, guaranteed by the assertion.
+		// - mem::transmute_copy is used instead of mem::transmute because the compiler can't tell our generic types have the same size.
+		unsafe { std::mem::transmute_copy(&ManuallyDrop::new(self)) }
 	}
 
 	fn pixel_range(&self, x: u32, y: u32) -> Range<usize> {

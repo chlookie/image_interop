@@ -55,7 +55,7 @@ pub mod spaces {
 	use crate::declare_color_space;
 
 	declare_color_space!(
-		RGB,
+		UnknownRGB,
 		"A color space with sRGB primaries, but unknown whether its transfer function is linear or nonlinear with gamma. The library client needs to make a choice based on any assumptions they can make."
 	);
 
@@ -69,6 +69,128 @@ pub mod spaces {
 	declare_color_space!(CieXYZD65);
 	declare_color_space!(OkLab);
 	declare_color_space!(OkLCh);
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+pub trait AssumeRGB
+where
+	Self: Sized,
+{
+	fn assume_linear_rgb(self) -> AssumedLinear<Self>;
+	fn assume_srgb(self) -> AssumedSrgb<Self>;
+}
+
+impl<S, F, T> AssumeRGB for T
+where
+	S: ScalarPrimitive,
+	F: ColorFormat,
+	T: Color<Scalar = S, Format = F, Space = spaces::UnknownRGB>,
+{
+	fn assume_linear_rgb(self) -> AssumedLinear<Self> {
+		AssumedLinear(self)
+	}
+
+	fn assume_srgb(self) -> AssumedSrgb<Self> {
+		AssumedSrgb(self)
+	}
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct AssumedLinear<T>(T)
+where
+	T: Sized;
+
+impl<S, F, T> Color for AssumedLinear<T>
+where
+	S: ScalarPrimitive,
+	F: ColorFormat,
+	T: Color<Scalar = S, Format = F, Space = spaces::UnknownRGB>,
+{
+	type Scalar = S;
+	type Format = F;
+	type Space = spaces::LinearRGB;
+}
+
+impl<S, F, T> ColorComponents for AssumedLinear<T>
+where
+	T: ColorComponents + Color<Scalar = S, Format = F, Space = spaces::UnknownRGB>,
+	S: ScalarPrimitive,
+	F: ColorFormat,
+{
+	type Tuple = T::Tuple;
+
+	type Array = T::Array;
+
+	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
+		Self(T::from_slice_unchecked(slice))
+	}
+
+	fn from_tuple(tuple: Self::Tuple) -> Self {
+		Self(T::from_tuple(tuple))
+	}
+
+	fn to_tuple(&self) -> Self::Tuple {
+		self.0.to_tuple()
+	}
+
+	fn from_array(array: Self::Array) -> Self {
+		Self(T::from_array(array))
+	}
+
+	fn to_array(&self) -> Self::Array {
+		self.0.to_array()
+	}
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct AssumedSrgb<T>(T);
+
+impl<S, F, T> Color for AssumedSrgb<T>
+where
+	S: ScalarPrimitive,
+	F: ColorFormat,
+	T: Color<Scalar = S, Format = F, Space = spaces::UnknownRGB>,
+{
+	type Scalar = S;
+	type Format = F;
+	type Space = spaces::SRGB;
+}
+
+impl<S, F, T> ColorComponents for AssumedSrgb<T>
+where
+	T: ColorComponents + Color<Scalar = S, Format = F, Space = spaces::UnknownRGB>,
+	S: ScalarPrimitive,
+	F: ColorFormat,
+{
+	type Tuple = T::Tuple;
+
+	type Array = T::Array;
+
+	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
+		Self(T::from_slice_unchecked(slice))
+	}
+
+	fn from_tuple(tuple: Self::Tuple) -> Self {
+		Self(T::from_tuple(tuple))
+	}
+
+	fn to_tuple(&self) -> Self::Tuple {
+		self.0.to_tuple()
+	}
+
+	fn from_array(array: Self::Array) -> Self {
+		Self(T::from_array(array))
+	}
+
+	fn to_array(&self) -> Self::Array {
+		self.0.to_array()
+	}
 }
 
 /*
