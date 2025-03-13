@@ -89,7 +89,7 @@ macro_rules! declare_color_format {
 			const CHANNELS: $crate::Channels = declare_color_format!(@count_channels $($channels,)*);
 		}
 
-		impl<From, Scalar> $crate::ColorFormatConversion<From, Scalar, {declare_color_format!(@count_channels $($channels,)*)}> for $name
+		impl<From, Scalar> $crate::ConvertFormatFrom<From, Scalar, {declare_color_format!(@count_channels $($channels,)*)}> for $name
 		where
 			From: $crate::ColorFormat $(+ [<$channels Component>]<Scalar>)+,
 		{

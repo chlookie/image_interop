@@ -7,7 +7,7 @@ use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
 use crate::{
-	Channels, Color, ColorComponents, ColorConversion, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut,
+	Channels, Color, ColorComponents, ConvertColorFrom, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut,
 	PixelView, PixelViewMut,
 };
 
@@ -97,12 +97,12 @@ impl<C: Color, B> Image<C, B> {
 	pub fn convert_color<C2>(mut self) -> Image<C2, B>
 	where
 		C: ColorComponents,
-		C2: Color<Scalar = C::Scalar> + ColorComponents + ColorConversion<C>,
+		C2: Color<Scalar = C::Scalar> + ColorComponents + ConvertColorFrom<C>,
 		Self: ImageIterMut<Pixel = C>,
 	{
 		for pixel in self.iter_pixels_mut() {
 			let color_in = pixel.as_color();
-			let color_out = C2::convert_from(color_in);
+			let color_out = C2::color_from(color_in);
 			for (dst, src) in pixel.slice.iter_mut().zip(color_out.to_array().as_ref()) {
 				*dst = *src
 			}

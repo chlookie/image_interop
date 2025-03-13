@@ -114,21 +114,21 @@ pub trait ColorComponents: Color {
 	fn to_array(&self) -> Self::Array;
 }
 
-pub trait ColorFormatConversion<From, Scalar, const CHANNELS: Channels> {
+pub trait ConvertFormatFrom<From, Scalar, const CHANNELS: Channels> {
 	fn convert_slice(slice: &[Scalar]) -> [Scalar; CHANNELS];
 }
 
-pub trait ColorConversion<From> {
-	fn convert_from(color: From) -> Self;
+pub trait ConvertColorFrom<From> {
+	fn color_from(color: From) -> Self;
 }
 
-impl<From, To, Scalar, Space, FormatTo, const CHANNELS: Channels> ColorConversion<From> for To
+impl<From, To, Scalar, Space, FormatTo, const CHANNELS: Channels> ConvertColorFrom<From> for To
 where
 	From: Color<Scalar = Scalar, Space = Space> + ColorComponents,
 	To: Color<Scalar = Scalar, Space = Space, Format = FormatTo> + ColorComponents<Array = [Scalar; CHANNELS]>,
-	FormatTo: ColorFormatConversion<From::Format, Scalar, { CHANNELS }>,
+	FormatTo: ConvertFormatFrom<From::Format, Scalar, { CHANNELS }>,
 {
-	fn convert_from(color: From) -> Self {
+	fn color_from(color: From) -> Self {
 		let array_in = color.to_array();
 		let array_out = To::Format::convert_slice(array_in.as_ref());
 		To::from_array(array_out)
