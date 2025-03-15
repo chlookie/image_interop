@@ -142,28 +142,22 @@ impl<C: Color, B> Image<C, B> {
 	where
 		C: Color<Space = spaces::UnknownRGB>,
 	{
-		assert!(mem::size_of::<Self>() == mem::size_of::<Image<AssumedLinear<C>, B>>());
-
-		// SAFETY:
-		// - Image is repr(C) *just in case* ZSTs (i.e. the PhatomData<C> field) were to change the struct representation.
-		// - AssumedLinear<T> is repr(transparent) as it is a direct wrapper over T, only for type-checking sake; and so semantically it also makes sense to bit-cast all of our pixels 1-to-1.
-		// - Self (Image<C, B>) and Image<AssumedLinear<C>, B> have the same size, guaranteed by the assertion.
-		// - mem::transmute_copy is used instead of mem::transmute because the compiler can't tell our generic types have the same size.
-		unsafe { std::mem::transmute_copy(&ManuallyDrop::new(self)) }
+		Image {
+			buffer: self.buffer,
+			layout: self.layout,
+			_color: PhantomData,
+		}
 	}
 
 	pub fn assume_srgb(self) -> Image<AssumedSrgb<C>, B>
 	where
 		C: Color<Space = spaces::UnknownRGB>,
 	{
-		assert!(mem::size_of::<Self>() == mem::size_of::<Image<AssumedSrgb<C>, B>>());
-
-		// SAFETY:
-		// - Image is repr(C) *just in case* ZSTs (i.e. the PhatomData<C> field) were to change the struct representation.
-		// - AssumedSrgb<T> is repr(transparent) as it is a direct wrapper over T, only for type-checking sake; and so semantically it also makes sense to bit-cast all of our pixels 1-to-1.
-		// - Self (Image<C, B>) and Image<AssumedSrgb<C>, B> have the same size, guaranteed by the assertion.
-		// - mem::transmute_copy is used instead of mem::transmute because the compiler can't tell our generic types have the same size.
-		unsafe { std::mem::transmute_copy(&ManuallyDrop::new(self)) }
+		Image {
+			buffer: self.buffer,
+			layout: self.layout,
+			_color: PhantomData,
+		}
 	}
 
 	fn pixel_range(&self, x: u32, y: u32) -> Range<usize> {
