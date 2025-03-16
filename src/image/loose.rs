@@ -1,8 +1,10 @@
+use std::ops::{Deref, DerefMut};
+
 use anyhow::{Result, ensure};
 
-use crate::{Channels, ImageLayout};
+use crate::{Channels, Color, ColorComponents, ImageLayout, ImageView, ImageViewMut, MAX_CHANNELS};
 
-use super::{InterleavedLayout, PackedLayout};
+use super::{GenericImage, InterleavedLayout, PackedLayout};
 
 /*
 --------------------------------------------------------------------------------
@@ -131,7 +133,7 @@ impl ImageLayout for LooseLayout {
 			.max(self.y_stride * self.width as usize)
 	}
 
-	fn color_channel_index(&self, _channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
+	fn color_channel_index_unchecked(&self, _channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
 		channel * self.channel_stride + x as usize * self.x_stride + y as usize * self.y_stride
 	}
 }
@@ -151,5 +153,56 @@ impl From<InterleavedLayout> for LooseLayout {
 impl From<PackedLayout> for LooseLayout {
 	fn from(value: PackedLayout) -> Self {
 		Into::<InterleavedLayout>::into(value).into()
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+impl<C, B> ImageView for GenericImage<C, LooseLayout, B>
+where
+	C: Color + ColorComponents,
+	B: Deref<Target = [C::Scalar]>,
+{
+	type Pixel = C;
+
+	const CHANNELS: Channels = Self::CHANNELS;
+
+	fn dimensions(&self) -> (u32, u32) {
+		(self.width(), self.height())
+	}
+
+	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel {
+		let mut buffer = [Default::default(); MAX_CHANNELS];
+
+		buffer
+			.iter_mut()
+			.enumerate()
+			.take(Self::CHANNELS)
+			.for_each(|(channel, buf)| {
+				let index = self.layout.color_channel_index_unchecked(Self::CHANNELS, x, y, channel);
+				let sample = (*self.buffer)[index];
+				*buf = sample;
+			});
+
+		C::from_slice_unchecked(&buffer[..Self::CHANNELS])
+	}
+}
+
+impl<C, B> ImageViewMut for GenericImage<C, LooseLayout, B>
+where
+	C: Color + ColorComponents,
+	B: DerefMut<Target = [C::Scalar]>,
+{
+	fn put_pixel_unchecked(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
+		// For each channel of the pixel, individually set the sample into the
+		// underlying buffer
+		for (channel, sample) in pixel.to_array().as_ref().iter().enumerate() {
+			let index = self.layout.color_channel_index_unchecked(Self::CHANNELS, x, y, channel);
+			(*self.buffer)[index] = *sample;
+		}
 	}
 }

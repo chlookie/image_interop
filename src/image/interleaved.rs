@@ -116,13 +116,13 @@ impl ImageLayout for InterleavedLayout {
 		(self.x_stride * self.height as usize).max(self.y_stride * self.width as usize) * channels as usize
 	}
 
-	fn color_channel_index(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
-		channel as usize + self.pixel_index(channels, x, y)
+	fn color_channel_index_unchecked(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
+		channel as usize + self.pixel_index_unchecked(channels, x, y)
 	}
 }
 
 impl InterleavedImageLayout for InterleavedLayout {
-	fn pixel_index(&self, _channels: Channels, x: u32, y: u32) -> usize {
+	fn pixel_index_unchecked(&self, _channels: Channels, x: u32, y: u32) -> usize {
 		x as usize * self.x_stride + y as usize * self.y_stride
 	}
 
@@ -190,7 +190,7 @@ where
 
 	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel {
 		// The channels are interleaved in the image so we can just access them as a slice
-		let range = self.layout.pixel_range(Self::CHANNELS, x, y);
+		let range = self.layout.pixel_range_unchecked(Self::CHANNELS, x, y);
 		let pixel_slice = &self.buffer[range];
 
 		C::from_slice_unchecked(pixel_slice)
@@ -204,7 +204,7 @@ where
 	B: DerefMut<Target = [C::Scalar]>,
 {
 	fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) -> Result<()> {
-		let range = self.layout.pixel_range(Self::CHANNELS, x, y);
+		let range = self.layout.pixel_range_unchecked(Self::CHANNELS, x, y);
 		let pixel_slice = self
 			.buffer
 			.get_mut(range)
@@ -216,7 +216,7 @@ where
 	}
 
 	fn put_pixel_unchecked(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
-		let range = self.layout.pixel_range(Self::CHANNELS, x, y);
+		let range = self.layout.pixel_range_unchecked(Self::CHANNELS, x, y);
 		let pixel_slice = &mut self.buffer[range];
 
 		pixel_slice.copy_from_slice(pixel.to_array().as_ref());
@@ -236,7 +236,6 @@ where
 {
 	type Pixel = C;
 
-	/// Returns an iterator over the pixels of the image.
 	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<C>> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
@@ -252,7 +251,6 @@ where
 		})
 	}
 
-	/// Returns an iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<C>)> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
@@ -289,7 +287,6 @@ where
 {
 	type Pixel = C;
 
-	/// Returns an iterator over the mutable pixels of the image, usable with `rayon`.
 	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<C>> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
@@ -307,7 +304,6 @@ where
 			})
 	}
 
-	/// Returns an iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
 	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<C>)> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
@@ -363,7 +359,6 @@ mod par_iter {
 	{
 		type Pixel = C;
 
-		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
 		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<C>> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
@@ -381,7 +376,6 @@ mod par_iter {
 				})
 		}
 
-		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<C>)> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
@@ -420,7 +414,6 @@ mod par_iter {
 	{
 		type Pixel = C;
 
-		/// Returns a parallel iterator over the mutable pixels of the image, usable with `rayon`.
 		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<C>> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
@@ -438,7 +431,6 @@ mod par_iter {
 				})
 		}
 
-		/// Returns a parallel iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
 		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<C>)> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();

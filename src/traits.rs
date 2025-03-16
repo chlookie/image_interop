@@ -37,6 +37,7 @@ impl ScalarPrimitive for half::f16 {}
 */
 
 pub type Channels = usize;
+pub const MAX_CHANNELS: Channels = 256;
 
 pub trait ColorComponent {}
 
@@ -153,19 +154,47 @@ pub trait ImageLayout: Copy + Clone {
 	fn minimum_buffer_size(&self, channels: Channels) -> usize;
 
 	/// Get the index of a color channel at a given x, y coordinate.
-	fn color_channel_index(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize;
+	fn color_channel_index_unchecked(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize;
+
+	fn color_channel_index(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> Result<usize> {
+		ensure!(channel < channels, "Channel index out of bounds");
+		ensure!(
+			x < self.width() && y < self.height(),
+			"Pixel x y coordinates out of bounds"
+		);
+
+		Ok(self.color_channel_index_unchecked(channels, x, y, channel))
+	}
 }
 
 /// Describes a generic image layout where the storage of pixels is interleaved (i.e. all channels of a pixel are stored contiguously in memory).
 pub trait InterleavedImageLayout: ImageLayout {
 	/// Get the index of a pixel at a given x, y coordinate.
-	fn pixel_index(&self, channels: Channels, x: u32, y: u32) -> usize;
+	fn pixel_index_unchecked(&self, channels: Channels, x: u32, y: u32) -> usize;
+
+	fn pixel_index(&self, channels: Channels, x: u32, y: u32) -> Result<usize> {
+		ensure!(
+			x < self.width() && y < self.height(),
+			"Pixel x y coordinates out of bounds"
+		);
+
+		Ok(self.pixel_index_unchecked(channels, x, y))
+	}
 
 	/// Get the range of indices for a pixel at a given x, y coordinate.
-	fn pixel_range(&self, channels: Channels, x: u32, y: u32) -> Range<usize> {
-		let start = self.pixel_index(channels, x, y);
+	fn pixel_range_unchecked(&self, channels: Channels, x: u32, y: u32) -> Range<usize> {
+		let start = self.pixel_index_unchecked(channels, x, y);
 		let end = start + channels;
 		start..end
+	}
+
+	fn pixel_range(&self, channels: Channels, x: u32, y: u32) -> Result<Range<usize>> {
+		ensure!(
+			x < self.width() && y < self.height(),
+			"Pixel x y coordinates out of bounds"
+		);
+
+		Ok(self.pixel_range_unchecked(channels, x, y))
 	}
 
 	/// Get the layout storage order.
@@ -306,7 +335,15 @@ pub trait ImageView {
 /// A trait for manipulating images.
 pub trait ImageViewMut: ImageView {
 	/// Put a pixel at location (x, y). Indexed from top left.
-	fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) -> Result<()>;
+	fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) -> Result<()> {
+		ensure!(
+			x < self.width() && y < self.height(),
+			"Pixel x y coordinates out of bounds"
+		);
+
+		self.put_pixel_unchecked(x, y, pixel);
+		Ok(())
+	}
 
 	/// Put a pixel at location (x, y). Indexed from top left.
 	///

@@ -34,6 +34,7 @@ impl PackedLayout {
 		Ok(Self { width, height, order })
 	}
 
+	/// Get the major and minor sidelengths of the image, i.e. the width and height if row major, or the height and width if column major.
 	pub fn major_minor_sidelengths(&self) -> (u32, u32) {
 		if self.is_row_major() {
 			(self.width, self.height)
@@ -42,6 +43,7 @@ impl PackedLayout {
 		}
 	}
 
+	/// Get the coordinates of the pixel at the given index.
 	fn reverse_index(&self, index: usize) -> (u32, u32) {
 		if self.is_row_major() {
 			(
@@ -70,13 +72,13 @@ impl ImageLayout for PackedLayout {
 		self.width as usize * self.height as usize * channels as usize
 	}
 
-	fn color_channel_index(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
-		channel as usize + self.pixel_index(channels, x, y)
+	fn color_channel_index_unchecked(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
+		channel as usize + self.pixel_index_unchecked(channels, x, y)
 	}
 }
 
 impl InterleavedImageLayout for PackedLayout {
-	fn pixel_index(&self, channels: Channels, x: u32, y: u32) -> usize {
+	fn pixel_index_unchecked(&self, channels: Channels, x: u32, y: u32) -> usize {
 		match self.order {
 			InterleavedLayoutOrder::RowMajor => x as usize + y as usize * self.width as usize * channels,
 			InterleavedLayoutOrder::ColumnMajor => y as usize + x as usize * self.height as usize * channels,
@@ -266,9 +268,9 @@ mod tests {
 	#[test]
 	fn test_color_channel_index() {
 		let layout = PackedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
-		assert_eq!(layout.color_channel_index(3, 5, 12, 0), 5 + 12 * 10 * 3);
+		assert_eq!(layout.color_channel_index_unchecked(3, 5, 12, 0), 5 + 12 * 10 * 3);
 
 		let layout = PackedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
-		assert_eq!(layout.color_channel_index(4, 7, 10, 1), 10 + 7 * 5 * 4 + 1);
+		assert_eq!(layout.color_channel_index_unchecked(4, 7, 10, 1), 10 + 7 * 5 * 4 + 1);
 	}
 }
