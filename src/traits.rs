@@ -142,7 +142,7 @@ where
 */
 
 /// Describes a generic image layout.
-pub trait ImageLayout {
+pub trait ImageLayout: Copy + Clone {
 	/// The width of the image.
 	fn width(&self) -> u32;
 

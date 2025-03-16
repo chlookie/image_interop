@@ -7,8 +7,8 @@ use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
 use crate::{
-	AssumedLinear, AssumedSrgb, Channels, Color, ColorComponents, ConvertColorFrom, ImageIter, ImageIterMut, ImageView,
-	ImageViewMut, PixelView, PixelViewMut, spaces,
+	AssumedLinear, AssumedSrgb, Channels, Color, ColorComponents, ConvertColorFrom, ImageIter, ImageIterMut,
+	ImageLayout, ImageView, ImageViewMut, PixelView, PixelViewMut, spaces,
 };
 
 /*
@@ -32,44 +32,41 @@ pub use packed::*;
 */
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>> {
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Image<C: Color, Layout: ImageLayout = PackedInterleavedLayout, Buffer = Vec<<C as Color>::Scalar>> {
 	/// The backing buffer of the image, which contains the actual samples.
 	pub(crate) buffer: Buffer,
 
 	/// The layout of the image, which dictates the size of the image and how to locate pixels in the buffer.
-	pub(crate) layout: InterleavedLayout,
+	pub(crate) layout: Layout,
 
 	/// Some PhatomData for our generic types
 	_color: PhantomData<C>,
 }
 
-impl<C: Color> Image<C, Vec<C::Scalar>> {
+impl<C: Color, L: ImageLayout> Image<C, L, Vec<C::Scalar>> {
 	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
-	pub fn new(width: u32, height: u32) -> Self {
-		let layout = InterleavedLayout::row_major_packed(Self::CHANNELS, width, height);
+	pub fn new(width: u32, height: u32) -> Result<Self>
+	where
+		PackedInterleavedLayout: Into<L>,
+	{
+		let layout: L = PackedInterleavedLayout::new(width, height, InterleavedLayoutOrder::RowMajor)?.into();
 		let buffer = vec![C::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
-
-		// Sanity check that the layout is well-formed
-		debug_assert!(
-			layout.is_well_formed(),
-			"The auto-generated layout is malformed, this is a bug."
-		);
 
 		// Sanity check that the layout/buffer dimensions are correct
 		debug_assert!(
-			buffer.len() == Self::expected_total_samples(layout),
+			buffer.len() == layout.minimum_buffer_size(Self::CHANNELS),
 			"The auto-generated buffer is not the exact size for the given layout, this is a bug."
 		);
 
-		Self {
+		Ok(Self {
 			buffer,
 			layout,
 			_color: PhantomData,
-		}
+		})
 	}
 
-	pub fn from_bytes<Bytes>(bytes: Bytes, layout: InterleavedLayout) -> Result<Self>
+	pub fn from_bytes<Bytes>(bytes: Bytes, layout: L) -> Result<Self>
 	where
 		Bytes: Deref<Target = [u8]>,
 		C::Scalar: FromBytes<Bytes = [u8]>,
@@ -85,20 +82,17 @@ impl<C: Color> Image<C, Vec<C::Scalar>> {
 	}
 }
 
-impl<C: Color, B> Image<C, B> {
+impl<C: Color, L: ImageLayout, B> Image<C, L, B> {
 	pub const CHANNELS: Channels = C::CHANNELS;
 
 	/// Creates a new [`Image`] instance given a backing buffer and an [`ImageLayout`].
-	pub fn from_buffer(buffer: B, layout: InterleavedLayout) -> Result<Self>
+	pub fn from_buffer(buffer: B, layout: L) -> Result<Self>
 	where
 		B: Deref<Target = [C::Scalar]>,
 	{
-		// Check that the layout is well-formed
-		ensure!(layout.is_well_formed(), "The given layout is malformed.");
-
 		// Check that the layout/buffer dimensions are correct
 		ensure!(
-			buffer.len() >= Self::expected_total_samples(layout),
+			buffer.len() >= layout.minimum_buffer_size(Self::CHANNELS),
 			"The given buffer is too small to fit the entire image as dictated by the given layout."
 		);
 
@@ -110,7 +104,7 @@ impl<C: Color, B> Image<C, B> {
 	}
 
 	#[cfg(not(feature = "rayon"))]
-	pub fn convert_color<C2>(mut self) -> Image<C2, B>
+	pub fn convert_color<C2>(mut self) -> Image<C2, L, B>
 	where
 		C: ColorComponents,
 		C2: Color<Scalar = C::Scalar> + ColorComponents + ConvertColorFrom<C>,
@@ -133,7 +127,7 @@ impl<C: Color, B> Image<C, B> {
 
 	/// TODO: Needs benchmarking to see if it's actually a good idea to use rayon here
 	#[cfg(feature = "rayon")]
-	pub fn convert_color<C2>(mut self) -> Image<C2, B>
+	pub fn convert_color<C2>(mut self) -> Image<C2, L, B>
 	where
 		C: ColorComponents,
 		C2: Color<Scalar = C::Scalar> + ColorComponents + ConvertColorFrom<C>,
@@ -157,7 +151,7 @@ impl<C: Color, B> Image<C, B> {
 		}
 	}
 
-	pub fn layout(&self) -> InterleavedLayout {
+	pub fn layout(&self) -> L {
 		self.layout
 	}
 
@@ -169,16 +163,7 @@ impl<C: Color, B> Image<C, B> {
 		self.buffer
 	}
 
-	pub fn total_samples(&self) -> usize {
-		Self::expected_total_samples(self.layout)
-	}
-
-	pub fn expected_total_samples(layout: InterleavedLayout) -> usize {
-		// Layout is checked for well-formed-ness at image construction
-		layout.total_padded_pixels().unwrap() * Self::CHANNELS
-	}
-
-	pub fn assume_linear_rgb(self) -> Image<AssumedLinear<C>, B>
+	pub fn assume_linear_rgb(self) -> Image<AssumedLinear<C>, L, B>
 	where
 		C: Color<Space = spaces::UnknownRGB>,
 	{
@@ -189,7 +174,7 @@ impl<C: Color, B> Image<C, B> {
 		}
 	}
 
-	pub fn assume_srgb(self) -> Image<AssumedSrgb<C>, B>
+	pub fn assume_srgb(self) -> Image<AssumedSrgb<C>, L, B>
 	where
 		C: Color<Space = spaces::UnknownRGB>,
 	{
