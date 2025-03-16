@@ -51,7 +51,7 @@ macro_rules! declare_color_component {
 			}
 
 			#[allow(dead_code)]
-			impl<const CHANNELS: $crate::Channels, Format, Scalar, Space> [<Has $type>]<Scalar> for $crate::StaticColor<{ CHANNELS }, Format, Scalar, Space>
+			impl<const CHANNELS: $crate::Channels, Format, Scalar, Space> [<Has $type>]<Scalar> for $crate::GenericColor<{ CHANNELS }, Format, Scalar, Space>
 			where
 				Format: [<$type Component>]<Scalar>,
 			{
@@ -61,7 +61,7 @@ macro_rules! declare_color_component {
 			}
 
 			#[allow(dead_code)]
-			impl<const CHANNELS: $crate::Channels, Format, Scalar, Space> [<Has $type Mut>]<Scalar> for $crate::StaticColor<{ CHANNELS }, Format, Scalar, Space>
+			impl<const CHANNELS: $crate::Channels, Format, Scalar, Space> [<Has $type Mut>]<Scalar> for $crate::GenericColor<{ CHANNELS }, Format, Scalar, Space>
 			where
 				Format: [<$type Component>]<Scalar>,
 			{

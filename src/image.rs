@@ -1,6 +1,5 @@
 use std::{
 	marker::PhantomData,
-	mem::{self, ManuallyDrop},
 	ops::{Deref, DerefMut, Range},
 };
 
