@@ -3,7 +3,6 @@ pub mod color;
 pub mod image;
 pub mod traits;
 
-pub use adaptors::*;
 pub use color::*;
 pub use image::*;
 pub use traits::*;

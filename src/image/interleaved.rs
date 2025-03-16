@@ -1,8 +1,13 @@
-use anyhow::{Result, ensure};
+use std::ops::{Deref, DerefMut};
 
-use crate::{Channels, ImageLayout, InterleavedImageLayout};
+use anyhow::{Context, Result, ensure};
 
-use super::{LooseLayout, PackedInterleavedLayout};
+use crate::{
+	Channels, Color, ColorComponents, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut,
+	InterleavedImageLayout, PixelView, PixelViewMut,
+};
+
+use super::{GenericImage, LooseLayout, PackedLayout};
 
 /*
 --------------------------------------------------------------------------------
@@ -81,10 +86,20 @@ impl InterleavedLayout {
 		self.y_stride
 	}
 
-	/// Get the layout storage order.
-	pub fn order(&self) -> InterleavedLayoutOrder {
-		InterleavedLayoutOrder::compute(self.x_stride, self.y_stride, self.width, self.height)
-			.expect("Computed layout should be valid since it was checked in the constructor")
+	pub fn major_minor_strides(&self) -> (usize, usize) {
+		if self.is_row_major() {
+			(self.y_stride, self.x_stride)
+		} else {
+			(self.x_stride, self.y_stride)
+		}
+	}
+
+	pub fn major_minor_sidelengths(&self) -> (u32, u32) {
+		if self.is_row_major() {
+			(self.width, self.height)
+		} else {
+			(self.height, self.width)
+		}
 	}
 }
 
@@ -110,20 +125,15 @@ impl InterleavedImageLayout for InterleavedLayout {
 	fn pixel_index(&self, _channels: Channels, x: u32, y: u32) -> usize {
 		x as usize * self.x_stride + y as usize * self.y_stride
 	}
-}
 
-impl InterleavedLayout {
-	fn is_row_major(&self) -> bool {
-		self.y_stride >= self.x_stride * self.width as usize
-	}
-
-	fn is_column_major(&self) -> bool {
-		self.x_stride >= self.y_stride * self.height as usize
+	fn order(&self) -> InterleavedLayoutOrder {
+		InterleavedLayoutOrder::compute(self.x_stride, self.y_stride, self.width, self.height)
+			.expect("Computed layout should be valid since it was checked in the constructor")
 	}
 }
 
-impl From<PackedInterleavedLayout> for InterleavedLayout {
-	fn from(value: PackedInterleavedLayout) -> Self {
+impl From<PackedLayout> for InterleavedLayout {
+	fn from(value: PackedLayout) -> Self {
 		let order = value.order();
 
 		match order {
@@ -155,5 +165,314 @@ impl TryFrom<LooseLayout> for InterleavedLayout {
 			x_stride: value.x_stride(),
 			y_stride: value.y_stride(),
 		})
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+impl<C, L, B> ImageView for GenericImage<C, L, B>
+where
+	C: Color + ColorComponents,
+	L: InterleavedImageLayout,
+	B: Deref<Target = [C::Scalar]>,
+{
+	type Pixel = C;
+
+	const CHANNELS: Channels = Self::CHANNELS;
+
+	fn dimensions(&self) -> (u32, u32) {
+		(self.width(), self.height())
+	}
+
+	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel {
+		// The channels are interleaved in the image so we can just access them as a slice
+		let range = self.layout.pixel_range(Self::CHANNELS, x, y);
+		let pixel_slice = &self.buffer[range];
+
+		C::from_slice_unchecked(pixel_slice)
+	}
+}
+
+impl<C, L, B> ImageViewMut for GenericImage<C, L, B>
+where
+	C: Color + ColorComponents,
+	L: InterleavedImageLayout,
+	B: DerefMut<Target = [C::Scalar]>,
+{
+	fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) -> Result<()> {
+		let range = self.layout.pixel_range(Self::CHANNELS, x, y);
+		let pixel_slice = self
+			.buffer
+			.get_mut(range)
+			.context("Pixel x y coordinates out of bounds")?;
+
+		pixel_slice.copy_from_slice(pixel.to_array().as_ref());
+
+		Ok(())
+	}
+
+	fn put_pixel_unchecked(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
+		let range = self.layout.pixel_range(Self::CHANNELS, x, y);
+		let pixel_slice = &mut self.buffer[range];
+
+		pixel_slice.copy_from_slice(pixel.to_array().as_ref());
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+impl<C, B> ImageIter for GenericImage<C, InterleavedLayout, B>
+where
+	C: Color,
+	B: Deref<Target = [C::Scalar]>,
+{
+	type Pixel = C;
+
+	/// Returns an iterator over the pixels of the image.
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<C>> {
+		// Layout is checked for well-formed-ness at image construction
+		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides();
+		let (_, minor_length) = layout.major_minor_sidelengths();
+
+		self.buffer.chunks_exact(major_stride).flat_map(move |padded_chunk| {
+			let chunk = &padded_chunk[..minor_length as usize];
+
+			chunk.chunks_exact(minor_stride as usize).map(move |padded_pixel| {
+				let slice = &padded_pixel[..Self::CHANNELS];
+				C::as_view_unchecked(slice)
+			})
+		})
+	}
+
+	/// Returns an iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<C>)> {
+		// Layout is checked for well-formed-ness at image construction
+		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides();
+		let (_, minor_length) = layout.major_minor_sidelengths();
+
+		self.buffer
+			.chunks_exact(major_stride)
+			.enumerate()
+			.flat_map(move |(major_index, padded_chunk)| {
+				let chunk = &padded_chunk[..minor_length as usize];
+
+				chunk
+					.chunks_exact(minor_stride)
+					.enumerate()
+					.map(move |(minor_index, padded_pixel)| {
+						let (x, y) = if layout.is_row_major() {
+							(minor_index, major_index)
+						} else {
+							(major_index, minor_index)
+						};
+						let slice = &padded_pixel[..Self::CHANNELS];
+						let pixel = C::as_view_unchecked(slice);
+
+						(x as u32, y as u32, pixel)
+					})
+			})
+	}
+}
+
+impl<C, B> ImageIterMut for GenericImage<C, InterleavedLayout, B>
+where
+	C: Color,
+	B: DerefMut<Target = [C::Scalar]>,
+{
+	type Pixel = C;
+
+	/// Returns an iterator over the mutable pixels of the image, usable with `rayon`.
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<C>> {
+		// Layout is checked for well-formed-ness at image construction
+		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides();
+		let (_, minor_length) = layout.major_minor_sidelengths();
+
+		self.buffer
+			.chunks_exact_mut(major_stride)
+			.flat_map(move |padded_chunk| {
+				let chunk = &mut padded_chunk[..minor_length as usize];
+
+				chunk.chunks_exact_mut(minor_stride).map(move |padded_pixel| {
+					let slice = &mut padded_pixel[..Self::CHANNELS];
+					C::as_view_mut_unchecked(slice)
+				})
+			})
+	}
+
+	/// Returns an iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<C>)> {
+		// Layout is checked for well-formed-ness at image construction
+		let layout = self.layout;
+		let (major_stride, minor_stride) = layout.major_minor_strides();
+		let (_, minor_length) = layout.major_minor_sidelengths();
+
+		self.buffer
+			.chunks_exact_mut(major_stride)
+			.enumerate()
+			.flat_map(move |(major_index, padded_chunk)| {
+				let chunk = &mut padded_chunk[..minor_length as usize];
+
+				chunk
+					.chunks_exact_mut(minor_stride)
+					.enumerate()
+					.map(move |(minor_index, padded_pixel)| {
+						let (x, y) = if layout.is_row_major() {
+							(minor_index, major_index)
+						} else {
+							(major_index, minor_index)
+						};
+						let slice = &mut padded_pixel[..Self::CHANNELS];
+						let pixel = C::as_view_mut_unchecked(slice);
+
+						(x as u32, y as u32, pixel)
+					})
+			})
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+#[cfg(feature = "rayon")]
+mod par_iter {
+	use rayon::{
+		iter::{IndexedParallelIterator, ParallelIterator},
+		slice::{ParallelSlice, ParallelSliceMut},
+	};
+
+	use crate::{ImageParallelIter, ImageParallelIterMut, PixelViewMut};
+
+	use super::*;
+
+	impl<C, B> ImageParallelIter for GenericImage<C, InterleavedLayout, B>
+	where
+		C: Color + Sync,
+		C::Scalar: Sync,
+		C::Format: Sync + Send,
+		B: Deref<Target = [C::Scalar]> + Sync,
+	{
+		type Pixel = C;
+
+		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
+		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<C>> {
+			// Layout is checked for well-formed-ness at image construction
+			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides();
+			let (_, minor_length) = layout.major_minor_sidelengths();
+
+			self.buffer
+				.par_chunks_exact(major_stride)
+				.flat_map(move |padded_chunk| {
+					let chunk = &padded_chunk[..minor_length as usize];
+
+					chunk.par_chunks_exact(minor_stride).map(move |padded_pixel| {
+						let slice = &padded_pixel[..Self::CHANNELS];
+						C::as_view_unchecked(slice)
+					})
+				})
+		}
+
+		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
+		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<C>)> {
+			// Layout is checked for well-formed-ness at image construction
+			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides();
+			let (_, minor_length) = layout.major_minor_sidelengths();
+
+			self.buffer
+				.par_chunks_exact(major_stride)
+				.enumerate()
+				.flat_map(move |(major_index, padded_chunk)| {
+					let chunk = &padded_chunk[..minor_length as usize];
+
+					chunk
+						.par_chunks_exact(minor_stride)
+						.enumerate()
+						.map(move |(minor_index, padded_pixel)| {
+							let (x, y) = if layout.is_row_major() {
+								(minor_index, major_index)
+							} else {
+								(major_index, minor_index)
+							};
+							let slice = &padded_pixel[..Self::CHANNELS];
+							let pixel = C::as_view_unchecked(slice);
+
+							(x as u32, y as u32, pixel)
+						})
+				})
+		}
+	}
+
+	impl<C, B> ImageParallelIterMut for GenericImage<C, InterleavedLayout, B>
+	where
+		C: Color + Send + Sync,
+		C::Scalar: Send + Sync,
+		C::Format: Send + Sync,
+		B: DerefMut<Target = [C::Scalar]> + Send + Sync,
+	{
+		type Pixel = C;
+
+		/// Returns a parallel iterator over the mutable pixels of the image, usable with `rayon`.
+		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<C>> {
+			// Layout is checked for well-formed-ness at image construction
+			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides();
+			let (_, minor_length) = layout.major_minor_sidelengths();
+
+			self.buffer
+				.par_chunks_exact_mut(major_stride)
+				.flat_map(move |padded_chunk| {
+					let chunk = &mut padded_chunk[..minor_length as usize];
+
+					chunk.par_chunks_exact_mut(minor_stride).map(move |padded_pixel| {
+						let slice = &mut padded_pixel[..Self::CHANNELS];
+						C::as_view_mut_unchecked(slice)
+					})
+				})
+		}
+
+		/// Returns a parallel iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
+		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<C>)> {
+			// Layout is checked for well-formed-ness at image construction
+			let layout = self.layout;
+			let (major_stride, minor_stride) = layout.major_minor_strides();
+			let (_, minor_length) = layout.major_minor_sidelengths();
+
+			self.buffer
+				.par_chunks_exact_mut(major_stride)
+				.enumerate()
+				.flat_map(move |(major_index, padded_chunk)| {
+					let chunk = &mut padded_chunk[..minor_length as usize];
+
+					chunk
+						.par_chunks_exact_mut(minor_stride)
+						.enumerate()
+						.map(move |(minor_index, padded_pixel)| {
+							let (x, y) = if layout.is_row_major() {
+								(minor_index, major_index)
+							} else {
+								(major_index, minor_index)
+							};
+							let slice = &mut padded_pixel[..Self::CHANNELS];
+							let pixel = C::as_view_mut_unchecked(slice);
+
+							(x as u32, y as u32, pixel)
+						})
+				})
+		}
 	}
 }

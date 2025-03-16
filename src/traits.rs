@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Range};
 
 use anyhow::{Result, ensure};
 
@@ -160,6 +160,24 @@ pub trait ImageLayout: Copy + Clone {
 pub trait InterleavedImageLayout: ImageLayout {
 	/// Get the index of a pixel at a given x, y coordinate.
 	fn pixel_index(&self, channels: Channels, x: u32, y: u32) -> usize;
+
+	/// Get the range of indices for a pixel at a given x, y coordinate.
+	fn pixel_range(&self, channels: Channels, x: u32, y: u32) -> Range<usize> {
+		let start = self.pixel_index(channels, x, y);
+		let end = start + channels;
+		start..end
+	}
+
+	/// Get the layout storage order.
+	fn order(&self) -> InterleavedLayoutOrder;
+
+	fn is_row_major(&self) -> bool {
+		self.order() == InterleavedLayoutOrder::RowMajor
+	}
+
+	fn is_column_major(&self) -> bool {
+		self.order() == InterleavedLayoutOrder::ColumnMajor
+	}
 }
 
 /*
@@ -379,3 +397,5 @@ mod par_iter {
 
 #[cfg(feature = "rayon")]
 pub use par_iter::*;
+
+use crate::InterleavedLayoutOrder;

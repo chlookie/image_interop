@@ -12,7 +12,7 @@ use super::{InterleavedLayout, InterleavedLayoutOrder};
 
 /// Describes the layout of a packed image, where each row/column of pixels is stored contiguously in memory, with no padding in between.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct PackedInterleavedLayout {
+pub struct PackedLayout {
 	/// The width of the image.
 	width: u32,
 
@@ -23,7 +23,7 @@ pub struct PackedInterleavedLayout {
 	order: InterleavedLayoutOrder,
 }
 
-impl PackedInterleavedLayout {
+impl PackedLayout {
 	/// Create a new packed layout.
 	pub fn new(width: u32, height: u32, order: InterleavedLayoutOrder) -> Result<Self> {
 		ensure!(width > 0, "Width cannot be zero");
@@ -32,13 +32,16 @@ impl PackedInterleavedLayout {
 		Ok(Self { width, height, order })
 	}
 
-	/// Get the layout storage order.
-	pub fn order(&self) -> InterleavedLayoutOrder {
-		self.order
+	pub fn major_minor_sidelengths(&self) -> (u32, u32) {
+		if self.is_row_major() {
+			(self.width, self.height)
+		} else {
+			(self.height, self.width)
+		}
 	}
 }
 
-impl ImageLayout for PackedInterleavedLayout {
+impl ImageLayout for PackedLayout {
 	fn width(&self) -> u32 {
 		self.width
 	}
@@ -56,16 +59,20 @@ impl ImageLayout for PackedInterleavedLayout {
 	}
 }
 
-impl InterleavedImageLayout for PackedInterleavedLayout {
+impl InterleavedImageLayout for PackedLayout {
 	fn pixel_index(&self, channels: Channels, x: u32, y: u32) -> usize {
 		match self.order {
 			InterleavedLayoutOrder::RowMajor => x as usize + y as usize * self.width as usize * channels,
 			InterleavedLayoutOrder::ColumnMajor => y as usize + x as usize * self.height as usize * channels,
 		}
 	}
+
+	fn order(&self) -> InterleavedLayoutOrder {
+		self.order
+	}
 }
 
-impl TryFrom<InterleavedLayout> for PackedInterleavedLayout {
+impl TryFrom<InterleavedLayout> for PackedLayout {
 	type Error = anyhow::Error;
 
 	fn try_from(value: InterleavedLayout) -> Result<Self, Self::Error> {
@@ -94,34 +101,36 @@ mod tests {
 
 	#[test]
 	fn test_constructor() {
-		let layout = PackedInterleavedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
+		let layout = PackedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
 		assert_eq!(layout.width(), 10);
 		assert_eq!(layout.height(), 20);
 		assert_eq!(layout.order(), InterleavedLayoutOrder::RowMajor);
 
-		let layout = PackedInterleavedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
+		let layout = PackedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
 		assert_eq!(layout.width(), 90);
 		assert_eq!(layout.height(), 5);
 		assert_eq!(layout.order(), InterleavedLayoutOrder::ColumnMajor);
 
-		assert!(PackedInterleavedLayout::new(0, 20, InterleavedLayoutOrder::RowMajor).is_err());
+		assert!(PackedLayout::new(0, 20, InterleavedLayoutOrder::RowMajor).is_err());
 
-		assert!(PackedInterleavedLayout::new(10, 0, InterleavedLayoutOrder::RowMajor).is_err());
+		assert!(PackedLayout::new(10, 0, InterleavedLayoutOrder::RowMajor).is_err());
 	}
 
+	#[test]
 	fn test_minimum_buffer_size() {
-		let layout = PackedInterleavedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
+		let layout = PackedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
 		assert_eq!(layout.minimum_buffer_size(3), 10 * 20 * 3);
 
-		let layout = PackedInterleavedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
+		let layout = PackedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
 		assert_eq!(layout.minimum_buffer_size(4), 90 * 5 * 4);
 	}
 
+	#[test]
 	fn test_color_channel_index() {
-		let layout = PackedInterleavedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
+		let layout = PackedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
 		assert_eq!(layout.color_channel_index(3, 5, 12, 0), 5 + 12 * 10 * 3);
 
-		let layout = PackedInterleavedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
+		let layout = PackedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
 		assert_eq!(layout.color_channel_index(4, 7, 10, 1), 10 + 7 * 5 * 4 + 1);
 	}
 }

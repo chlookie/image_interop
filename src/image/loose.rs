@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 
 use crate::{Channels, ImageLayout};
 
-use super::InterleavedLayout;
+use super::{InterleavedLayout, PackedLayout};
 
 /*
 --------------------------------------------------------------------------------
@@ -145,5 +145,11 @@ impl From<InterleavedLayout> for LooseLayout {
 			x_stride: value.x_stride(),
 			y_stride: value.y_stride(),
 		}
+	}
+}
+
+impl From<PackedLayout> for LooseLayout {
+	fn from(value: PackedLayout) -> Self {
+		Into::<InterleavedLayout>::into(value).into()
 	}
 }
