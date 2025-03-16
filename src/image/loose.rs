@@ -2,15 +2,17 @@ use anyhow::ensure;
 
 use crate::{Channels, ImageLayout};
 
+use super::InterleavedLayout;
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 --------------------------------------------------------------------------------
 */
 
-/// Describes the order in which the color channels are stored in a channel-separated (i.e. not necessarily interleaved or planar) image.
+/// Describes the order in which the color channels are not stored contigously in memory.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ChannelSeparatedLayoutOrder {
+pub enum LooseLayoutOrder {
 	ChannelRowColumn,
 	ChannelColumnRow,
 	RowChannelColumn,
@@ -19,7 +21,8 @@ pub enum ChannelSeparatedLayoutOrder {
 	ColumnRowChannel,
 }
 
-impl ChannelSeparatedLayoutOrder {
+impl LooseLayoutOrder {
+	/// Compute the layout order from the strides and dimensions of the image.
 	pub fn compute(channel_stride: usize, x_stride: usize, y_stride: usize, width: u32, height: u32) -> Option<Self> {
 		if channel_stride >= x_stride * height as usize && x_stride >= y_stride * width as usize {
 			Some(Self::ChannelRowColumn)
@@ -45,9 +48,9 @@ impl ChannelSeparatedLayoutOrder {
 --------------------------------------------------------------------------------
 */
 
-/// Describes the layout of a planar image, where each color channel of a pixel is not necessarily stored contiguously in memory, but instead is on its own plane in a 3rd dimension.
+/// Describes the layout of a loose-layout image, where the color channels are not necessarily stored contiguously in memory. This is a generalization of the interleaved layout and can be used for planar or other layouts.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ChannelSeparatedLayout {
+pub struct LooseLayout {
 	/// The width of the image.
 	width: u32,
 
@@ -64,15 +67,15 @@ pub struct ChannelSeparatedLayout {
 	y_stride: usize,
 }
 
-impl ChannelSeparatedLayout {
-	/// Create a new planar layout.
+impl LooseLayout {
+	/// Create a new loose layout.
 	pub fn new(width: u32, height: u32, channel_stride: usize, x_stride: usize, y_stride: usize) -> Result<Self> {
 		// Check that it is well-formed
 		ensure!(channel_stride > 0, "Channel stride cannot be zero");
 		ensure!(x_stride > 0, "X stride cannot be zero");
 		ensure!(y_stride > 0, "Y stride cannot be zero");
 		ensure!(
-			ChannelSeparatedLayoutOrder::compute(channel_stride, x_stride, y_stride, width, height).is_some(),
+			LooseLayoutOrder::compute(channel_stride, x_stride, y_stride, width, height).is_some(),
 			"Invalid strides"
 		);
 
@@ -85,20 +88,24 @@ impl ChannelSeparatedLayout {
 		})
 	}
 
+	/// Get the channel stride.
 	pub fn channel_stride(&self) -> usize {
 		self.channel_stride
 	}
 
+	/// Get the x stride.
 	pub fn x_stride(&self) -> usize {
 		self.x_stride
 	}
 
+	/// Get the y stride.
 	pub fn y_stride(&self) -> usize {
 		self.y_stride
 	}
 
-	fn order(&self) -> ChannelSeparatedLayoutOrder {
-		ChannelSeparatedLayoutOrder::compute(
+	/// Get the layout storage order.
+	pub fn order(&self) -> LooseLayoutOrder {
+		LooseLayoutOrder::compute(
 			self.channel_stride,
 			self.x_stride,
 			self.y_stride,
@@ -109,7 +116,7 @@ impl ChannelSeparatedLayout {
 	}
 }
 
-impl ImageLayout for ChannelSeparatedLayout {
+impl ImageLayout for LooseLayout {
 	fn width(&self) -> u32 {
 		self.width
 	}
@@ -126,5 +133,17 @@ impl ImageLayout for ChannelSeparatedLayout {
 
 	fn color_channel_index(&self, x: u32, y: u32, channel: Channels) -> usize {
 		channel * self.channel_stride + x as usize * self.x_stride + y as usize * self.y_stride
+	}
+}
+
+impl From<InterleavedLayout> for LooseLayout {
+	fn from(value: InterleavedLayout) -> Self {
+		Self {
+			width: value.width(),
+			height: value.height(),
+			channel_stride: 1,
+			x_stride: value.x_stride(),
+			y_stride: value.y_stride(),
+		}
 	}
 }

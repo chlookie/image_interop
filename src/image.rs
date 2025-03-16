@@ -18,12 +18,12 @@ use crate::{
 */
 
 pub mod interleaved;
+pub mod loose;
 pub mod packed;
-pub mod planar;
 
 pub use interleaved::*;
+pub use loose::*;
 pub use packed::*;
-pub use planar::*;
 
 /*
 --------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ pub use planar::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>, Layout: ImageLayout = PackedLayout> {
+pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>, Layout: ImageLayout = PackedInterleavedLayout> {
 	/// The backing buffer of the image, which contains the actual samples.
 	pub(crate) buffer: Buffer,
 

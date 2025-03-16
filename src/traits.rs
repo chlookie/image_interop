@@ -143,14 +143,22 @@ where
 
 /// Describes a generic image layout.
 pub trait ImageLayout {
+	/// The width of the image.
 	fn width(&self) -> u32;
+
+	/// The height of the image.
 	fn height(&self) -> u32;
+
+	/// The minimum buffer size required to store the image.
 	fn minimum_buffer_size(&self, channels: Channels) -> usize;
+
+	/// Get the index of a color channel at a given x, y coordinate.
 	fn color_channel_index(&self, x: u32, y: u32, channel: Channels) -> usize;
 }
 
-/// Describes a generic image layout where the storage of pixels is interleaved.
+/// Describes a generic image layout where the storage of pixels is interleaved (i.e. all channels of a pixel are stored contiguously in memory).
 pub trait InterleavedImageLayout: ImageLayout {
+	/// Get the index of a pixel at a given x, y coordinate.
 	fn pixel_index(&self, x: u32, y: u32) -> usize;
 }
 

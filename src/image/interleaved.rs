@@ -2,12 +2,15 @@ use anyhow::ensure;
 
 use crate::{Channels, ImageLayout, InterleavedImageLayout};
 
+use super::{LooseLayout, PackedInterleavedLayout};
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 --------------------------------------------------------------------------------
 */
 
+/// Describes the order in which the pixels are stored in memory.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InterleavedLayoutOrder {
 	RowMajor,
@@ -15,6 +18,7 @@ pub enum InterleavedLayoutOrder {
 }
 
 impl InterleavedLayoutOrder {
+	/// Compute the layout order from the strides and dimensions of the image.
 	pub fn compute(x_stride: usize, y_stride: usize, width: u32, height: u32) -> Option<Self> {
 		if y_stride >= x_stride * width as usize {
 			Some(Self::RowMajor)
@@ -67,15 +71,18 @@ impl InterleavedLayout {
 		})
 	}
 
+	/// Get the x stride.
 	pub fn x_stride(&self) -> usize {
 		self.x_stride
 	}
 
+	/// Get the y stride.
 	pub fn y_stride(&self) -> usize {
 		self.y_stride
 	}
 
-	fn order(&self) -> InterleavedLayoutOrder {
+	/// Get the layout storage order.
+	pub fn order(&self) -> InterleavedLayoutOrder {
 		InterleavedLayoutOrder::compute(self.x_stride, self.y_stride, self.width, self.height)
 			.expect("Computed layout should be valid since it was checked in the constructor")
 	}
@@ -112,5 +119,41 @@ impl InterleavedLayout {
 
 	fn is_column_major(&self) -> bool {
 		self.x_stride >= self.y_stride * self.height as usize
+	}
+}
+
+impl From<PackedInterleavedLayout> for InterleavedLayout {
+	fn from(value: PackedInterleavedLayout) -> Self {
+		let order = value.order();
+
+		match order {
+			InterleavedLayoutOrder::RowMajor => Self {
+				width: value.width(),
+				height: value.height(),
+				x_stride: 1,
+				y_stride: value.width() as usize,
+			},
+			InterleavedLayoutOrder::ColumnMajor => Self {
+				width: value.width(),
+				height: value.height(),
+				x_stride: value.height() as usize,
+				y_stride: 1,
+			},
+		}
+	}
+}
+
+impl TryFrom<LooseLayout> for InterleavedLayout {
+	type Error = ();
+
+	fn try_from(value: LooseLayout) -> Result<Self, Self::Error> {
+		ensure!(value.channel_stride() == 1);
+
+		Ok(Self {
+			width: value.width(),
+			height: value.height(),
+			x_stride: value.x_stride(),
+			y_stride: value.y_stride(),
+		})
 	}
 }
