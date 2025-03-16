@@ -1,8 +1,10 @@
+use std::ops::{Deref, DerefMut};
+
 use anyhow::{Result, ensure};
 
-use crate::{Channels, ImageLayout, InterleavedImageLayout};
+use crate::{Channels, Color, ImageIter, ImageIterMut, ImageLayout, InterleavedImageLayout, PixelView, PixelViewMut};
 
-use super::{InterleavedLayout, InterleavedLayoutOrder};
+use super::{GenericImage, InterleavedLayout, InterleavedLayoutOrder};
 
 /*
 --------------------------------------------------------------------------------
@@ -37,6 +39,20 @@ impl PackedLayout {
 			(self.width, self.height)
 		} else {
 			(self.height, self.width)
+		}
+	}
+
+	fn reverse_index(&self, index: usize) -> (u32, u32) {
+		if self.is_row_major() {
+			(
+				(index % self.width as usize) as u32,
+				(index / self.width as usize) as u32,
+			)
+		} else {
+			(
+				(index / self.height as usize) as u32,
+				(index % self.height as usize) as u32,
+			)
 		}
 	}
 }
@@ -86,6 +102,128 @@ impl TryFrom<InterleavedLayout> for PackedLayout {
 			height: value.height(),
 			order: value.order(),
 		})
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+impl<C, B> ImageIter for GenericImage<C, PackedLayout, B>
+where
+	C: Color,
+	B: Deref<Target = [C::Scalar]>,
+{
+	type Pixel = C;
+
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<C>> {
+		self.buffer.chunks_exact(Self::CHANNELS).map(C::as_view_unchecked)
+	}
+
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<C>)> {
+		self.buffer
+			.chunks_exact(Self::CHANNELS)
+			.enumerate()
+			.map(|(index, slice)| {
+				let (x, y) = self.layout.reverse_index(index);
+				(x, y, C::as_view_unchecked(slice))
+			})
+	}
+}
+
+impl<C, B> ImageIterMut for GenericImage<C, PackedLayout, B>
+where
+	C: Color,
+	B: DerefMut<Target = [C::Scalar]>,
+{
+	type Pixel = C;
+
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<C>> {
+		self.buffer
+			.chunks_exact_mut(Self::CHANNELS)
+			.map(C::as_view_mut_unchecked)
+	}
+
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<C>)> {
+		self.buffer
+			.chunks_exact_mut(Self::CHANNELS)
+			.enumerate()
+			.map(|(index, slice)| {
+				let (x, y) = self.layout.reverse_index(index);
+				(x, y, C::as_view_mut_unchecked(slice))
+			})
+	}
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+#[cfg(feature = "rayon")]
+mod par_iter {
+	use std::ops::Deref;
+
+	use rayon::{
+		iter::{IndexedParallelIterator, ParallelIterator},
+		slice::{ParallelSlice, ParallelSliceMut},
+	};
+
+	use crate::{ImageParallelIter, ImageParallelIterMut, PixelViewMut};
+
+	use super::*;
+
+	impl<C, B> ImageParallelIter for GenericImage<C, PackedLayout, B>
+	where
+		C: Color + Sync,
+		C::Scalar: Sync,
+		C::Format: Sync + Send,
+		B: Deref<Target = [C::Scalar]> + Sync,
+	{
+		type Pixel = C;
+
+		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<C>> {
+			self.buffer.par_chunks_exact(Self::CHANNELS).map(C::as_view_unchecked)
+		}
+
+		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<C>)> {
+			self.buffer
+				.par_chunks_exact(Self::CHANNELS)
+				.enumerate()
+				.map(|(index, slice)| {
+					let (x, y) = self.layout.reverse_index(index);
+					(x, y, C::as_view_unchecked(slice))
+				})
+		}
+	}
+
+	impl<C, B> ImageParallelIterMut for GenericImage<C, PackedLayout, B>
+	where
+		C: Color + Send + Sync,
+		C::Scalar: Send + Sync,
+		C::Format: Send + Sync,
+		B: DerefMut<Target = [C::Scalar]> + Send + Sync,
+	{
+		type Pixel = C;
+
+		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<C>> {
+			self.buffer
+				.par_chunks_exact_mut(Self::CHANNELS)
+				.map(C::as_view_mut_unchecked)
+		}
+
+		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<C>)> {
+			self.buffer
+				.par_chunks_exact_mut(Self::CHANNELS)
+				.enumerate()
+				.map(|(index, slice)| {
+					let (x, y) = self.layout.reverse_index(index);
+					(x, y, C::as_view_mut_unchecked(slice))
+				})
+		}
 	}
 }
 

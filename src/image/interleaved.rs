@@ -238,7 +238,6 @@ where
 
 	/// Returns an iterator over the pixels of the image.
 	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<C>> {
-		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -255,7 +254,6 @@ where
 
 	/// Returns an iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<C>)> {
-		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -293,7 +291,6 @@ where
 
 	/// Returns an iterator over the mutable pixels of the image, usable with `rayon`.
 	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<C>> {
-		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -312,7 +309,6 @@ where
 
 	/// Returns an iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
 	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<C>)> {
-		// Layout is checked for well-formed-ness at image construction
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -369,7 +365,6 @@ mod par_iter {
 
 		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
 		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<C>> {
-			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
@@ -388,7 +383,6 @@ mod par_iter {
 
 		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<C>)> {
-			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
@@ -428,7 +422,6 @@ mod par_iter {
 
 		/// Returns a parallel iterator over the mutable pixels of the image, usable with `rayon`.
 		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<C>> {
-			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
@@ -447,7 +440,6 @@ mod par_iter {
 
 		/// Returns a parallel iterator over the mutable pixels of the image and their respective coordinates, usable with `rayon`.
 		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<C>)> {
-			// Layout is checked for well-formed-ness at image construction
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
