@@ -95,6 +95,7 @@ impl<C: Color, B> Image<C, B> {
 		})
 	}
 
+	#[cfg(not(feature = "rayon"))]
 	pub fn convert_color<C2>(mut self) -> Image<C2, B>
 	where
 		C: ColorComponents,
@@ -108,6 +109,31 @@ impl<C: Color, B> Image<C, B> {
 				*dst = *src
 			}
 		}
+
+		Image {
+			buffer: self.buffer,
+			layout: self.layout,
+			_color: PhantomData,
+		}
+	}
+
+	#[cfg(feature = "rayon")]
+	pub fn convert_color<C2>(mut self) -> Image<C2, B>
+	where
+		C: ColorComponents,
+		C2: Color<Scalar = C::Scalar> + ColorComponents + ConvertColorFrom<C>,
+		Self: crate::ImageParallelIterMut<Pixel = C>,
+	{
+		use crate::ImageParallelIterMut;
+		use rayon::iter::ParallelIterator;
+
+		self.par_iter_pixels_mut().for_each(|pixel| {
+			let color_in = pixel.as_color();
+			let color_out = C2::color_from(color_in);
+			for (dst, src) in pixel.slice.iter_mut().zip(color_out.to_array().as_ref()) {
+				*dst = *src
+			}
+		});
 
 		Image {
 			buffer: self.buffer,
