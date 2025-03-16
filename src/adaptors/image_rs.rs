@@ -17,7 +17,7 @@ impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::Rgb<S> {
 	type Array = [S; 3];
 
 	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
-		Self::from_array(slice.try_into().unwrap())
+		Self::from_array(slice.try_into().expect("Slice must have exactly 3 elements"))
 	}
 
 	fn from_tuple(tuple: Self::Tuple) -> Self {
@@ -48,7 +48,7 @@ impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::Rgba<S> {
 	type Array = [S; 4];
 
 	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
-		Self::from_array(slice.try_into().unwrap())
+		Self::from_array(slice.try_into().expect("Slice must have exactly 4 elements"))
 	}
 
 	fn from_tuple(tuple: Self::Tuple) -> Self {
@@ -79,7 +79,7 @@ impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::Luma<S> {
 	type Array = [S; 1];
 
 	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
-		Self::from_array(slice.try_into().unwrap())
+		Self::from_array(slice.try_into().expect("Slice must have exactly 1 element"))
 	}
 
 	fn from_tuple(tuple: Self::Tuple) -> Self {
@@ -110,7 +110,7 @@ impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::LumaA<S> 
 	type Array = [S; 2];
 
 	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
-		Self::from_array(slice.try_into().unwrap())
+		Self::from_array(slice.try_into().expect("Slice must have exactly 2 elements"))
 	}
 
 	fn from_tuple(tuple: Self::Tuple) -> Self {

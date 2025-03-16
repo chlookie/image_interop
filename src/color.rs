@@ -243,7 +243,11 @@ macro_rules! impl_color_components_for_generic_color {
 			type Array = [Scalar; $channels];
 
 			fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self {
-				Self::from_array(slice.try_into().unwrap())
+				Self::from_array(
+					slice
+						.try_into()
+						.expect("Slice is not the correct length for this color"),
+				)
 			}
 
 			fn from_tuple(tuple: Self::Tuple) -> Self {
