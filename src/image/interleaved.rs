@@ -1,4 +1,30 @@
+use anyhow::ensure;
+
 use crate::{Channels, ImageLayout, InterleavedImageLayout};
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum InterleavedLayoutOrder {
+	RowMajor,
+	ColumnMajor,
+}
+
+impl InterleavedLayoutOrder {
+	pub fn compute(x_stride: usize, y_stride: usize, width: u32, height: u32) -> Option<Self> {
+		if y_stride >= x_stride * width as usize {
+			Some(Self::RowMajor)
+		} else if x_stride >= y_stride * height as usize {
+			Some(Self::ColumnMajor)
+		} else {
+			None
+		}
+	}
+}
 
 /*
 --------------------------------------------------------------------------------
@@ -24,13 +50,21 @@ pub struct InterleavedLayout {
 
 impl InterleavedLayout {
 	/// Create a new interleaved layout.
-	pub fn new(width: u32, height: u32, x_stride: usize, y_stride: usize) -> Self {
-		Self {
+	pub fn new(width: u32, height: u32, x_stride: usize, y_stride: usize) -> Result<Self> {
+		// Check that the layout is well-formed.
+		ensure!(x_stride > 0, "X stride cannot be zero");
+		ensure!(y_stride > 0, "Y stride cannot be zero");
+		ensure!(
+			InterleavedLayoutOrder::compute(x_stride, y_stride, width, height).is_some(),
+			"Invalid strides"
+		);
+
+		Ok(Self {
 			width,
 			height,
 			x_stride,
 			y_stride,
-		}
+		})
 	}
 
 	pub fn x_stride(&self) -> usize {
@@ -39,6 +73,11 @@ impl InterleavedLayout {
 
 	pub fn y_stride(&self) -> usize {
 		self.y_stride
+	}
+
+	fn order(&self) -> InterleavedLayoutOrder {
+		InterleavedLayoutOrder::compute(self.x_stride, self.y_stride, self.width, self.height)
+			.expect("Computed layout should be valid since it was checked in the constructor")
 	}
 }
 

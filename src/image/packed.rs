@@ -1,16 +1,12 @@
 use crate::{Channels, ImageLayout, InterleavedImageLayout};
 
+use super::InterleavedLayoutOrder;
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 --------------------------------------------------------------------------------
 */
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum PackedLayoutOrder {
-	RowMajor,
-	ColumnMajor,
-}
 
 /// Describes the layout of a packed image, where each row/column of pixels is stored contiguously in memory, with no padding in between.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -22,16 +18,16 @@ pub struct PackedLayout {
 	height: u32,
 
 	/// The storage order of the image, either column major or row major.
-	order: PackedLayoutOrder,
+	order: InterleavedLayoutOrder,
 }
 
 impl PackedLayout {
 	/// Create a new packed layout.
-	pub fn new(width: u32, height: u32, order: PackedLayoutOrder) -> Self {
+	pub fn new(width: u32, height: u32, order: InterleavedLayoutOrder) -> Self {
 		Self { width, height, order }
 	}
 
-	pub fn order(&self) -> PackedLayoutOrder {
+	pub fn order(&self) -> InterleavedLayoutOrder {
 		self.order
 	}
 }
@@ -57,8 +53,8 @@ impl ImageLayout for PackedLayout {
 impl InterleavedImageLayout for PackedLayout {
 	fn pixel_index(&self, x: u32, y: u32) -> usize {
 		match self.order {
-			PackedLayoutOrder::RowMajor => y as usize * self.width as usize,
-			PackedLayoutOrder::ColumnMajor => x as usize * self.height as usize,
+			InterleavedLayoutOrder::RowMajor => y as usize * self.width as usize,
+			InterleavedLayoutOrder::ColumnMajor => x as usize * self.height as usize,
 		}
 	}
 }

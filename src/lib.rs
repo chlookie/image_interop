@@ -11,4 +11,5 @@ pub use traits::*;
 #[macro_use]
 pub mod macros;
 
-// TODO: Add adaptors for zune-image and image-rs
+// TODO: Add adaptors for zune-image and color
+// TODO: Do not use anyhow::Result, use thiserror instead
