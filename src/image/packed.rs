@@ -16,13 +16,24 @@ pub enum PackedLayoutOrder {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct PackedLayout {
 	/// The width of the image.
-	pub width: u32,
+	width: u32,
 
 	/// The height of the image.
-	pub height: u32,
+	height: u32,
 
 	/// The storage order of the image, either column major or row major.
-	pub order: PackedLayoutOrder,
+	order: PackedLayoutOrder,
+}
+
+impl PackedLayout {
+	/// Create a new packed layout.
+	pub fn new(width: u32, height: u32, order: PackedLayoutOrder) -> Self {
+		Self { width, height, order }
+	}
+
+	pub fn order(&self) -> PackedLayoutOrder {
+		self.order
+	}
 }
 
 impl ImageLayout for PackedLayout {

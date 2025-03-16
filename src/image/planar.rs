@@ -10,19 +10,44 @@ use crate::{Channels, ImageLayout};
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct PlanarLayout {
 	/// The width of the image.
-	pub width: u32,
+	width: u32,
 
 	/// The height of the image.
-	pub height: u32,
+	height: u32,
 
 	/// Add this stride to get to the next color channel for the same pixel.
-	pub channel_stride: usize,
+	channel_stride: usize,
 
 	/// Add this stride to get to the next pixel in the x-direction.
-	pub x_stride: usize,
+	x_stride: usize,
 
 	/// Add this stride to get to the next pixel in the y-direction.
-	pub y_stride: usize,
+	y_stride: usize,
+}
+
+impl PlanarLayout {
+	/// Create a new planar layout.
+	pub fn new(width: u32, height: u32, channel_stride: usize, x_stride: usize, y_stride: usize) -> Self {
+		Self {
+			width,
+			height,
+			channel_stride,
+			x_stride,
+			y_stride,
+		}
+	}
+
+	pub fn channel_stride(&self) -> usize {
+		self.channel_stride
+	}
+
+	pub fn x_stride(&self) -> usize {
+		self.x_stride
+	}
+
+	pub fn y_stride(&self) -> usize {
+		self.y_stride
+	}
 }
 
 impl ImageLayout for PlanarLayout {

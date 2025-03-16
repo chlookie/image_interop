@@ -10,16 +10,36 @@ use crate::{Channels, ImageLayout, InterleavedImageLayout};
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct InterleavedLayout {
 	/// The width of the image.
-	pub width: u32,
+	width: u32,
 
 	/// The height of the image.
-	pub height: u32,
+	height: u32,
 
 	/// Add this stride to get to the next pixel in the x-direction.
-	pub stride_x: usize,
+	x_stride: usize,
 
 	/// Add this stride to get to the next pixel in the y-direction.
-	pub stride_y: usize,
+	y_stride: usize,
+}
+
+impl InterleavedLayout {
+	/// Create a new interleaved layout.
+	pub fn new(width: u32, height: u32, x_stride: usize, y_stride: usize) -> Self {
+		Self {
+			width,
+			height,
+			x_stride,
+			y_stride,
+		}
+	}
+
+	pub fn x_stride(&self) -> usize {
+		self.x_stride
+	}
+
+	pub fn y_stride(&self) -> usize {
+		self.y_stride
+	}
 }
 
 impl ImageLayout for InterleavedLayout {
@@ -32,7 +52,7 @@ impl ImageLayout for InterleavedLayout {
 	}
 
 	fn minimum_buffer_size(&self, channels: Channels) -> usize {
-		(self.stride_x * self.height as usize).max(self.stride_y * self.width as usize) * channels as usize
+		(self.x_stride * self.height as usize).max(self.y_stride * self.width as usize) * channels as usize
 	}
 
 	fn color_channel_index(&self, x: u32, y: u32, channel: Channels) -> usize {
@@ -42,16 +62,16 @@ impl ImageLayout for InterleavedLayout {
 
 impl InterleavedImageLayout for InterleavedLayout {
 	fn pixel_index(&self, x: u32, y: u32) -> usize {
-		x as usize * self.stride_x + y as usize * self.stride_y
+		x as usize * self.x_stride + y as usize * self.y_stride
 	}
 }
 
 impl InterleavedLayout {
 	fn is_row_major(&self) -> bool {
-		self.stride_y >= self.stride_x * self.width as usize
+		self.y_stride >= self.x_stride * self.width as usize
 	}
 
 	fn is_column_major(&self) -> bool {
-		self.stride_x >= self.stride_y * self.height as usize
+		self.x_stride >= self.y_stride * self.height as usize
 	}
 }
