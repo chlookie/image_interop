@@ -153,13 +153,13 @@ pub trait ImageLayout {
 	fn minimum_buffer_size(&self, channels: Channels) -> usize;
 
 	/// Get the index of a color channel at a given x, y coordinate.
-	fn color_channel_index(&self, x: u32, y: u32, channel: Channels) -> usize;
+	fn color_channel_index(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize;
 }
 
 /// Describes a generic image layout where the storage of pixels is interleaved (i.e. all channels of a pixel are stored contiguously in memory).
 pub trait InterleavedImageLayout: ImageLayout {
 	/// Get the index of a pixel at a given x, y coordinate.
-	fn pixel_index(&self, x: u32, y: u32) -> usize;
+	fn pixel_index(&self, channels: Channels, x: u32, y: u32) -> usize;
 }
 
 /*

@@ -1,4 +1,4 @@
-use anyhow::ensure;
+use anyhow::{Result, ensure};
 
 use crate::{Channels, ImageLayout};
 
@@ -131,7 +131,7 @@ impl ImageLayout for LooseLayout {
 			.max(self.y_stride * self.width as usize)
 	}
 
-	fn color_channel_index(&self, x: u32, y: u32, channel: Channels) -> usize {
+	fn color_channel_index(&self, _channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
 		channel * self.channel_stride + x as usize * self.x_stride + y as usize * self.y_stride
 	}
 }

@@ -32,8 +32,8 @@ pub use packed::*;
 */
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>, Layout: ImageLayout = PackedInterleavedLayout> {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>> {
 	/// The backing buffer of the image, which contains the actual samples.
 	pub(crate) buffer: Buffer,
 

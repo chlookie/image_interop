@@ -1,4 +1,4 @@
-use anyhow::ensure;
+use anyhow::{Result, ensure};
 
 use crate::{Channels, ImageLayout, InterleavedImageLayout};
 
@@ -101,13 +101,13 @@ impl ImageLayout for InterleavedLayout {
 		(self.x_stride * self.height as usize).max(self.y_stride * self.width as usize) * channels as usize
 	}
 
-	fn color_channel_index(&self, x: u32, y: u32, channel: Channels) -> usize {
-		channel as usize + self.pixel_index(x, y)
+	fn color_channel_index(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
+		channel as usize + self.pixel_index(channels, x, y)
 	}
 }
 
 impl InterleavedImageLayout for InterleavedLayout {
-	fn pixel_index(&self, x: u32, y: u32) -> usize {
+	fn pixel_index(&self, _channels: Channels, x: u32, y: u32) -> usize {
 		x as usize * self.x_stride + y as usize * self.y_stride
 	}
 }
@@ -144,7 +144,7 @@ impl From<PackedInterleavedLayout> for InterleavedLayout {
 }
 
 impl TryFrom<LooseLayout> for InterleavedLayout {
-	type Error = ();
+	type Error = anyhow::Error;
 
 	fn try_from(value: LooseLayout) -> Result<Self, Self::Error> {
 		ensure!(value.channel_stride() == 1);
