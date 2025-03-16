@@ -7,9 +7,23 @@ use anyhow::{Context, Ok, Result, ensure};
 use num_traits::FromBytes;
 
 use crate::{
-	AssumedLinear, AssumedSrgb, Channels, Color, ColorComponents, ConvertColorFrom, ImageIter, ImageIterMut,
-	ImageLayout, ImageView, ImageViewMut, PixelView, PixelViewMut, spaces,
+	AssumedLinear, AssumedSrgb, Channels, Color, ColorComponents, ConvertColorFrom, ImageIter, ImageIterMut, ImageView,
+	ImageViewMut, PixelView, PixelViewMut, spaces,
 };
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
+pub mod interleaved;
+pub mod packed;
+pub mod planar;
+
+pub use interleaved::*;
+pub use packed::*;
+pub use planar::*;
 
 /*
 --------------------------------------------------------------------------------
@@ -19,12 +33,12 @@ use crate::{
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>> {
+pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>, Layout: ImageLayout = PackedLayout> {
 	/// The backing buffer of the image, which contains the actual samples.
 	pub(crate) buffer: Buffer,
 
 	/// The layout of the image, which dictates the size of the image and how to locate pixels in the buffer.
-	pub(crate) layout: ImageLayout,
+	pub(crate) layout: InterleavedLayout,
 
 	/// Some PhatomData for our generic types
 	_color: PhantomData<C>,
@@ -33,7 +47,7 @@ pub struct Image<C: Color, Buffer = Vec<<C as Color>::Scalar>> {
 impl<C: Color> Image<C, Vec<C::Scalar>> {
 	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
 	pub fn new(width: u32, height: u32) -> Self {
-		let layout = ImageLayout::row_major_packed(Self::CHANNELS, width, height);
+		let layout = InterleavedLayout::row_major_packed(Self::CHANNELS, width, height);
 		let buffer = vec![C::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
 
 		// Sanity check that the layout is well-formed
@@ -55,7 +69,7 @@ impl<C: Color> Image<C, Vec<C::Scalar>> {
 		}
 	}
 
-	pub fn from_bytes<Bytes>(bytes: Bytes, layout: ImageLayout) -> Result<Self>
+	pub fn from_bytes<Bytes>(bytes: Bytes, layout: InterleavedLayout) -> Result<Self>
 	where
 		Bytes: Deref<Target = [u8]>,
 		C::Scalar: FromBytes<Bytes = [u8]>,
@@ -75,7 +89,7 @@ impl<C: Color, B> Image<C, B> {
 	pub const CHANNELS: Channels = C::CHANNELS;
 
 	/// Creates a new [`Image`] instance given a backing buffer and an [`ImageLayout`].
-	pub fn from_buffer(buffer: B, layout: ImageLayout) -> Result<Self>
+	pub fn from_buffer(buffer: B, layout: InterleavedLayout) -> Result<Self>
 	where
 		B: Deref<Target = [C::Scalar]>,
 	{
@@ -117,6 +131,7 @@ impl<C: Color, B> Image<C, B> {
 		}
 	}
 
+	/// TODO: Needs benchmarking to see if it's actually a good idea to use rayon here
 	#[cfg(feature = "rayon")]
 	pub fn convert_color<C2>(mut self) -> Image<C2, B>
 	where
@@ -142,7 +157,7 @@ impl<C: Color, B> Image<C, B> {
 		}
 	}
 
-	pub fn layout(&self) -> ImageLayout {
+	pub fn layout(&self) -> InterleavedLayout {
 		self.layout
 	}
 
@@ -158,7 +173,7 @@ impl<C: Color, B> Image<C, B> {
 		Self::expected_total_samples(self.layout)
 	}
 
-	pub fn expected_total_samples(layout: ImageLayout) -> usize {
+	pub fn expected_total_samples(layout: InterleavedLayout) -> usize {
 		// Layout is checked for well-formed-ness at image construction
 		layout.total_padded_pixels().unwrap() * Self::CHANNELS
 	}

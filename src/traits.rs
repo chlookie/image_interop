@@ -141,6 +141,25 @@ where
 --------------------------------------------------------------------------------
 */
 
+/// Describes a generic image layout.
+pub trait ImageLayout {
+	fn width(&self) -> u32;
+	fn height(&self) -> u32;
+	fn minimum_buffer_size(&self, channels: Channels) -> usize;
+	fn color_channel_index(&self, x: u32, y: u32, channel: Channels) -> usize;
+}
+
+/// Describes a generic image layout where the storage of pixels is interleaved.
+pub trait InterleavedImageLayout: ImageLayout {
+	fn pixel_index(&self, x: u32, y: u32) -> usize;
+}
+
+/*
+--------------------------------------------------------------------------------
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+--------------------------------------------------------------------------------
+*/
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PixelView<'a, C: Color> {
 	pub slice: &'a [C::Scalar],
