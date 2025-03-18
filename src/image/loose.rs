@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use anyhow::{Result, ensure};
 
-use crate::{Channels, Color, ImageLayout, ImageView, ImageViewMut};
+use crate::{ChannelShrinkable, Channels, Color, ImageLayout, ImageView, ImageViewMut};
 
 use super::{GenericImage, InterleavedLayout, PackedLayout};
 
@@ -153,6 +153,17 @@ impl ImageLayout for LooseLayout {
 
 	fn component_index_unchecked(&self, x: u32, y: u32, channel: Channels) -> usize {
 		channel * self.channel_stride + x as usize * self.x_stride + y as usize * self.y_stride
+	}
+}
+
+impl<T> ChannelShrinkable<LooseLayout> for T
+where
+	T: Into<LooseLayout>,
+{
+	fn shrink_channels(self, channels: Channels) -> Result<LooseLayout> {
+		let layout = self.into();
+		ensure!(channels <= layout.channels, "Cannot shrink to more channels");
+		Ok(LooseLayout { channels, ..layout })
 	}
 }
 

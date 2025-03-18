@@ -209,6 +209,16 @@ pub trait InterleavedImageLayout: ImageLayout {
 	}
 }
 
+pub trait ChannelShrinkable<T> {
+	/// Shrink the layout to a layout with fewer channels by adjusting strides. Fails if the new layout would have more channels.
+	fn shrink_channels(self, channels: Channels) -> Result<T>;
+}
+
+pub trait Croppable<T> {
+	/// Crop the layout to a smaller region.
+	fn crop(self, x: u32, y: u32, width: u32, height: u32) -> T;
+}
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||

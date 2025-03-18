@@ -1,9 +1,12 @@
-use std::{marker::PhantomData, ops::Deref};
+use std::{
+	marker::{Copy, PhantomData},
+	ops::Deref,
+};
 
 use anyhow::{Ok, Result, ensure};
 use num_traits::FromBytes;
 
-use crate::{AssumedLinear, AssumedSrgb, Channels, Color, ConvertColorFrom, ImageLayout, spaces};
+use crate::{AssumedLinear, AssumedSrgb, ChannelShrinkable, Channels, Color, ConvertColorFrom, ImageLayout, spaces};
 
 /*
 --------------------------------------------------------------------------------
@@ -64,6 +67,7 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout> GenericImage<
 		})
 	}
 
+	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
 	pub fn from_bytes<Bytes>(bytes: Bytes, layout: L) -> Result<Self>
 	where
 		Bytes: Deref<Target = [u8]>,
@@ -105,21 +109,27 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 		})
 	}
 
+	/// Returns the layout of the image.
 	pub fn layout(&self) -> L {
 		self.layout
 	}
 
+	/// Returns the buffer of the image.
 	pub fn buffer(&self) -> &B {
 		&self.buffer
 	}
 
+	/// Returns the buffer of the image.
 	pub fn into_buffer(self) -> B {
 		self.buffer
 	}
 
-	pub fn transmute_color<C2>(self) -> GenericImage<CHANNELS, C2, L, B>
+	/// Return a transmuted version of the image with a different color type.
+	///
+	/// Careful; it does not convert the color, it just changes the type as-is regardless of the actual color values. See [`convert_color`] for that instead.
+	pub fn transmute_color<DstColor>(self) -> GenericImage<CHANNELS, DstColor, L, B>
 	where
-		C2: Color<CHANNELS, Scalar = C::Scalar>,
+		DstColor: Color<CHANNELS, Scalar = C::Scalar>,
 	{
 		GenericImage {
 			buffer: self.buffer,
@@ -128,16 +138,33 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 		}
 	}
 
+	/// Shrink the number of channels in the image, and transmutes the color type.
+	pub fn shrink_channels<const DST_CHANNELS: Channels, DstColor>(
+		self,
+	) -> Result<GenericImage<DST_CHANNELS, DstColor, LooseLayout, B>>
+	where
+		DstColor: Color<DST_CHANNELS>,
+		L: ChannelShrinkable<LooseLayout>,
+	{
+		let layout = self.layout.shrink_channels(DST_CHANNELS)?;
+
+		Ok(GenericImage {
+			buffer: self.buffer,
+			layout,
+			_color: PhantomData,
+		})
+	}
+
 	#[cfg(not(feature = "rayon"))]
-	pub fn convert_color<C2>(mut self) -> GenericImage<C2, L, B>
+	pub fn convert_color<DstColor>(mut self) -> GenericImage<DstColor, L, B>
 	where
 		C: ColorComponents,
-		C2: Color<Scalar = C::Scalar> + ColorComponents + ConvertColorFrom<C>,
+		DstColor: Color<Scalar = C::Scalar> + ColorComponents + ConvertColorFrom<C>,
 		Self: ImageIterMut<Pixel = C>,
 	{
 		for pixel in self.iter_pixels_mut() {
 			let color_in = pixel.as_color();
-			let color_out = C2::color_from(color_in);
+			let color_out = DstColor::color_from(color_in);
 			for (dst, src) in pixel.slice.iter_mut().zip(color_out.to_array().as_ref()) {
 				*dst = *src
 			}
@@ -150,11 +177,14 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 		}
 	}
 
+	/// Convert the color of the image to a different color type.
+	///
+	/// If you instead want to transmute the color type without converting the color values, see [`transmute_color`] instead.
 	/// TODO: Needs benchmarking to see if it's actually a good idea to use rayon here
 	#[cfg(feature = "rayon")]
-	pub fn convert_color<C2>(mut self) -> GenericImage<CHANNELS, C2, L, B>
+	pub fn convert_color<DstColor>(mut self) -> GenericImage<CHANNELS, DstColor, L, B>
 	where
-		C2: Color<CHANNELS, Scalar = C::Scalar> + ConvertColorFrom<CHANNELS, C>,
+		DstColor: Color<CHANNELS, Scalar = C::Scalar> + ConvertColorFrom<CHANNELS, C>,
 		Self: crate::ImageParallelIterMut<CHANNELS, Pixel = C>,
 	{
 		use crate::ImageParallelIterMut;
@@ -162,7 +192,7 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 
 		self.par_iter_pixels_mut().for_each(|pixel| {
 			let color_in = pixel.as_color();
-			let color_out = C2::color_from(color_in);
+			let color_out = DstColor::color_from(color_in);
 			for (dst, src) in pixel.slice.iter_mut().zip(color_out.to_array().as_ref()) {
 				*dst = *src
 			}
@@ -175,6 +205,7 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 		}
 	}
 
+	/// Assume that the color of the image is linear RGB when it is unknown.
 	pub fn assume_linear_rgb(self) -> GenericImage<CHANNELS, AssumedLinear<C>, L, B>
 	where
 		C: Color<CHANNELS, Space = spaces::UnknownRGB>,
@@ -182,6 +213,7 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 		self.transmute_color()
 	}
 
+	/// Assume that the color of the image is sRGB when it is unknown.
 	pub fn assume_srgb(self) -> GenericImage<CHANNELS, AssumedSrgb<C>, L, B>
 	where
 		C: Color<CHANNELS, Space = spaces::UnknownRGB>,

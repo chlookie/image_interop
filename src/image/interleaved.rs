@@ -3,8 +3,8 @@ use std::ops::{Deref, DerefMut};
 use anyhow::{Context, Result, ensure};
 
 use crate::{
-	Channels, Color, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut, InterleavedImageLayout, PixelView,
-	PixelViewMut,
+	Channels, Color, ImageIter, ImageIterMut, ImageLayout, ImageView, ImageViewMut,
+	InterleavedImageLayout, PixelView, PixelViewMut,
 };
 
 use super::{GenericImage, LooseLayout, PackedLayout};
