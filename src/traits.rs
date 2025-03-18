@@ -89,23 +89,38 @@ pub trait ConvertFormatFrom<const CHANNELS: Channels, From, Scalar> {
 }
 
 /// A color that can be converted to and from another color.
-pub trait ConvertColorFrom<From> {
+pub trait ConvertColorFrom<const CHANNELS: Channels, From> {
 	/// Convert a color from one type to another.
 	fn color_from(color: From) -> Self;
 }
 
-// impl<const CHANNELS: Channels, From, To, Scalar, Space, FormatTo> ConvertColorFrom<From> for To
-// where
-// 	From: Color<CHANNELS, Scalar = Scalar, Space = Space> + ColorComponents<CHANNELS>,
-// 	To: Color<CHANNELS, Scalar = Scalar, Space = Space, Format = FormatTo> + ColorComponents<CHANNELS>,
-// 	FormatTo: ConvertFormatFrom<CHANNELS, From::Format, Scalar>,
-// {
-// 	fn color_from(color: From) -> Self {
-// 		let array_in = color.to_array();
-// 		let array_out = To::Format::convert_array(array_in);
-// 		To::from_array(array_out)
-// 	}
-// }
+/// A color that can be converted to and from another color.
+pub trait ConvertColorTo<const CHANNELS: Channels, To> {
+	/// Convert a color from one type to another.
+	fn convert(self) -> To;
+}
+
+impl<const CHANNELS: Channels, From, To, Scalar, Space, FormatTo> ConvertColorFrom<CHANNELS, From> for To
+where
+	From: Color<CHANNELS, Scalar = Scalar, Space = Space>,
+	To: Color<CHANNELS, Scalar = Scalar, Space = Space, Format = FormatTo>,
+	FormatTo: ConvertFormatFrom<CHANNELS, From::Format, Scalar>,
+{
+	fn color_from(color: From) -> Self {
+		let array_in = color.to_array();
+		let array_out = To::Format::convert_array(array_in);
+		To::from_array(array_out)
+	}
+}
+
+impl<const CHANNELS: Channels, From, To> ConvertColorTo<CHANNELS, To> for From
+where
+	To: ConvertColorFrom<CHANNELS, From>,
+{
+	fn convert(self) -> To {
+		To::color_from(self)
+	}
+}
 
 /*
 --------------------------------------------------------------------------------

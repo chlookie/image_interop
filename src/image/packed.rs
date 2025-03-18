@@ -148,9 +148,9 @@ where
 			.map(TryInto::try_into)
 			.map(Result::unwrap)
 			.enumerate()
-			.map(|(index, slice)| {
+			.map(|(index, array)| {
 				let (x, y) = self.layout.reverse_index(index);
-				(x, y, C::as_view(slice))
+				(x, y, C::as_view(array))
 			})
 	}
 }
@@ -255,9 +255,9 @@ mod par_iter {
 				.map(TryInto::try_into)
 				.map(Result::unwrap)
 				.enumerate()
-				.map(|(index, slice)| {
+				.map(|(index, array)| {
 					let (x, y) = self.layout.reverse_index(index);
-					(x, y, C::as_view_mut(slice))
+					(x, y, C::as_view_mut(array))
 				})
 		}
 	}

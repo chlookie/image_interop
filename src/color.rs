@@ -9,46 +9,46 @@ use crate::{Channels, Color, ColorFormat, ColorSpace, ScalarPrimitive};
 */
 
 pub mod components {
-	
+	use crate::declare_color_component;
 
-	// declare_color_component!(Alpha);
-	// declare_color_component!(Red);
-	// declare_color_component!(Green);
-	// declare_color_component!(Blue);
-	// declare_color_component!(Hue);
-	// declare_color_component!(Whiteness);
-	// declare_color_component!(Blackness);
-	// declare_color_component!(Saturation);
-	// declare_color_component!(Value);
-	// declare_color_component!(Lightness);
-	// declare_color_component!(A);
-	// declare_color_component!(B);
-	// declare_color_component!(Chroma);
-	// declare_color_component!(X);
-	// declare_color_component!(Y);
-	// declare_color_component!(Z);
+	declare_color_component!(Alpha);
+	declare_color_component!(Red);
+	declare_color_component!(Green);
+	declare_color_component!(Blue);
+	declare_color_component!(Hue);
+	declare_color_component!(Whiteness);
+	declare_color_component!(Blackness);
+	declare_color_component!(Saturation);
+	declare_color_component!(Value);
+	declare_color_component!(Lightness);
+	declare_color_component!(A);
+	declare_color_component!(B);
+	declare_color_component!(Chroma);
+	declare_color_component!(X);
+	declare_color_component!(Y);
+	declare_color_component!(Z);
 }
 
 pub mod formats {
-	
+	use crate::declare_color_format;
 
-	// declare_color_format!(RGB: Red, Green, Blue);
-	// declare_color_format!(HSL: Hue, Saturation, Lightness);
-	// declare_color_format!(HSV: Hue, Saturation, Value);
-	// declare_color_format!(HWB: Hue, Whiteness, Blackness);
-	// declare_color_format!(LAB: Lightness, A, B);
-	// declare_color_format!(LCH: Lightness, Chroma, Hue);
-	// declare_color_format!(XYZ: X, Y, Z);
-	// declare_color_format!(Y: Y);
+	declare_color_format!(RGB: Red, Green, Blue);
+	declare_color_format!(HSL: Hue, Saturation, Lightness);
+	declare_color_format!(HSV: Hue, Saturation, Value);
+	declare_color_format!(HWB: Hue, Whiteness, Blackness);
+	declare_color_format!(LAB: Lightness, A, B);
+	declare_color_format!(LCH: Lightness, Chroma, Hue);
+	declare_color_format!(XYZ: X, Y, Z);
+	declare_color_format!(Y: Y);
 
-	// declare_color_format!(RGBA: Red, Green, Blue, Alpha);
-	// declare_color_format!(HSLA: Hue, Saturation, Lightness, Alpha);
-	// declare_color_format!(HSVA: Hue, Saturation, Value, Alpha);
-	// declare_color_format!(HWBA: Hue, Whiteness, Blackness, Alpha);
-	// declare_color_format!(LABA: Lightness, A, B, Alpha);
-	// declare_color_format!(LCHA: Lightness, Chroma, Hue, Alpha);
-	// declare_color_format!(XYZA: X, Y, Z, Alpha);
-	// declare_color_format!(YA: Y, Alpha);
+	declare_color_format!(RGBA: Red, Green, Blue, Alpha);
+	declare_color_format!(HSLA: Hue, Saturation, Lightness, Alpha);
+	declare_color_format!(HSVA: Hue, Saturation, Value, Alpha);
+	declare_color_format!(HWBA: Hue, Whiteness, Blackness, Alpha);
+	declare_color_format!(LABA: Lightness, A, B, Alpha);
+	declare_color_format!(LCHA: Lightness, Chroma, Hue, Alpha);
+	declare_color_format!(XYZA: X, Y, Z, Alpha);
+	declare_color_format!(YA: Y, Alpha);
 }
 
 pub mod spaces {

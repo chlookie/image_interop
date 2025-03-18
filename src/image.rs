@@ -154,7 +154,7 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 	#[cfg(feature = "rayon")]
 	pub fn convert_color<C2>(mut self) -> GenericImage<CHANNELS, C2, L, B>
 	where
-		C2: Color<CHANNELS, Scalar = C::Scalar> + ConvertColorFrom<C>,
+		C2: Color<CHANNELS, Scalar = C::Scalar> + ConvertColorFrom<CHANNELS, C>,
 		Self: crate::ImageParallelIterMut<CHANNELS, Pixel = C>,
 	{
 		use crate::ImageParallelIterMut;

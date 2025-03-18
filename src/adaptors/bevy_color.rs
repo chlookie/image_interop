@@ -10,6 +10,14 @@ impl Color for bevy_color::Srgba {
 	type Scalar = f32;
 	type Format = formats::RGBA;
 	type Space = spaces::SRGB;
+
+	fn from_array(array: [Self::Scalar; CHANNELS]) -> Self {
+		todo!()
+	}
+
+	fn to_array(&self) -> [Self::Scalar; CHANNELS] {
+		todo!()
+	}
 }
 
 impl Color for bevy_color::LinearRgba {
