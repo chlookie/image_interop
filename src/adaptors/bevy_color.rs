@@ -63,7 +63,7 @@ impl Color for bevy_color::Oklcha {
 impl Color for bevy_color::Xyza {
 	type Scalar = f32;
 	type Format = formats::XYZA;
-	type Space = spaces::CieXYZD65;
+	type Space = spaces::CieXYZ;
 }
 
 use bevy_color::ColorToComponents;

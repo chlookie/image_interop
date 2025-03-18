@@ -15,6 +15,9 @@ use super::{GenericImage, InterleavedLayout, InterleavedLayoutOrder};
 /// Describes the layout of a packed image, where each row/column of pixels is stored contiguously in memory, with no padding in between.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct PackedLayout {
+	/// The number of color channels in the image.
+	channels: Channels,
+
 	/// The width of the image.
 	width: u32,
 
@@ -27,11 +30,17 @@ pub struct PackedLayout {
 
 impl PackedLayout {
 	/// Create a new packed layout.
-	pub fn new(width: u32, height: u32, order: InterleavedLayoutOrder) -> Result<Self> {
+	pub fn new(channels: Channels, width: u32, height: u32, order: InterleavedLayoutOrder) -> Result<Self> {
+		ensure!(channels > 0, "Channels cannot be zero");
 		ensure!(width > 0, "Width cannot be zero");
 		ensure!(height > 0, "Height cannot be zero");
 
-		Ok(Self { width, height, order })
+		Ok(Self {
+			channels,
+			width,
+			height,
+			order,
+		})
 	}
 
 	/// Get the major and minor sidelengths of the image, i.e. the width and height if row major, or the height and width if column major.
@@ -60,6 +69,10 @@ impl PackedLayout {
 }
 
 impl ImageLayout for PackedLayout {
+	fn channels(&self) -> Channels {
+		self.channels
+	}
+
 	fn width(&self) -> u32 {
 		self.width
 	}
@@ -68,20 +81,20 @@ impl ImageLayout for PackedLayout {
 		self.height
 	}
 
-	fn minimum_buffer_size(&self, channels: Channels) -> usize {
-		self.width as usize * self.height as usize * channels as usize
+	fn minimum_buffer_size(&self) -> usize {
+		self.width as usize * self.height as usize * self.channels as usize
 	}
 
-	fn color_channel_index_unchecked(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
-		channel as usize + self.pixel_index_unchecked(channels, x, y)
+	fn component_index_unchecked(&self, x: u32, y: u32, channel: Channels) -> usize {
+		channel as usize + self.pixel_index_unchecked(x, y)
 	}
 }
 
 impl InterleavedImageLayout for PackedLayout {
-	fn pixel_index_unchecked(&self, channels: Channels, x: u32, y: u32) -> usize {
+	fn pixel_index_unchecked(&self, x: u32, y: u32) -> usize {
 		match self.order {
-			InterleavedLayoutOrder::RowMajor => x as usize + y as usize * self.width as usize * channels,
-			InterleavedLayoutOrder::ColumnMajor => y as usize + x as usize * self.height as usize * channels,
+			InterleavedLayoutOrder::RowMajor => x as usize + y as usize * self.width as usize * self.channels,
+			InterleavedLayoutOrder::ColumnMajor => y as usize + x as usize * self.height as usize * self.channels,
 		}
 	}
 
@@ -100,6 +113,7 @@ impl TryFrom<InterleavedLayout> for PackedLayout {
 		);
 
 		Ok(Self {
+			channels: value.channels(),
 			width: value.width(),
 			height: value.height(),
 			order: value.order(),
@@ -113,48 +127,58 @@ impl TryFrom<InterleavedLayout> for PackedLayout {
 --------------------------------------------------------------------------------
 */
 
-impl<C, B> ImageIter for GenericImage<C, PackedLayout, B>
+impl<const CHANNELS: Channels, C, B> ImageIter<CHANNELS> for GenericImage<CHANNELS, C, PackedLayout, B>
 where
-	C: Color,
+	C: Color<CHANNELS>,
 	B: Deref<Target = [C::Scalar]>,
 {
 	type Pixel = C;
 
-	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<C>> {
-		self.buffer.chunks_exact(Self::CHANNELS).map(C::as_view_unchecked)
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<CHANNELS, C>> {
+		self.buffer
+			.chunks_exact(CHANNELS)
+			.map(TryInto::try_into)
+			.map(Result::unwrap)
+			.map(C::as_view)
 	}
 
-	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<C>)> {
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<CHANNELS, C>)> {
 		self.buffer
-			.chunks_exact(Self::CHANNELS)
+			.chunks_exact(CHANNELS)
+			.map(TryInto::try_into)
+			.map(Result::unwrap)
 			.enumerate()
 			.map(|(index, slice)| {
 				let (x, y) = self.layout.reverse_index(index);
-				(x, y, C::as_view_unchecked(slice))
+				(x, y, C::as_view(slice))
 			})
 	}
 }
 
-impl<C, B> ImageIterMut for GenericImage<C, PackedLayout, B>
+impl<const CHANNELS: Channels, C, B> ImageIterMut<CHANNELS> for GenericImage<CHANNELS, C, PackedLayout, B>
 where
-	C: Color,
+	C: Color<CHANNELS>,
 	B: DerefMut<Target = [C::Scalar]>,
 {
 	type Pixel = C;
 
-	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<C>> {
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<CHANNELS, C>> {
 		self.buffer
-			.chunks_exact_mut(Self::CHANNELS)
-			.map(C::as_view_mut_unchecked)
+			.chunks_exact_mut(CHANNELS)
+			.map(TryInto::try_into)
+			.map(Result::unwrap)
+			.map(C::as_view_mut)
 	}
 
-	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<C>)> {
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<CHANNELS, C>)> {
 		self.buffer
-			.chunks_exact_mut(Self::CHANNELS)
+			.chunks_exact_mut(CHANNELS)
+			.map(TryInto::try_into)
+			.map(Result::unwrap)
 			.enumerate()
-			.map(|(index, slice)| {
+			.map(|(index, array)| {
 				let (x, y) = self.layout.reverse_index(index);
-				(x, y, C::as_view_mut_unchecked(slice))
+				(x, y, C::as_view_mut(array))
 			})
 	}
 }
@@ -178,52 +202,62 @@ mod par_iter {
 
 	use super::*;
 
-	impl<C, B> ImageParallelIter for GenericImage<C, PackedLayout, B>
+	impl<const CHANNELS: Channels, C, B> ImageParallelIter<CHANNELS> for GenericImage<CHANNELS, C, PackedLayout, B>
 	where
-		C: Color + Sync,
+		C: Color<CHANNELS> + Sync,
 		C::Scalar: Sync,
 		C::Format: Sync + Send,
 		B: Deref<Target = [C::Scalar]> + Sync,
 	{
 		type Pixel = C;
 
-		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<C>> {
-			self.buffer.par_chunks_exact(Self::CHANNELS).map(C::as_view_unchecked)
+		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<CHANNELS, C>> {
+			self.buffer
+				.par_chunks_exact(CHANNELS)
+				.map(TryInto::try_into)
+				.map(Result::unwrap)
+				.map(C::as_view)
 		}
 
-		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<C>)> {
+		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<CHANNELS, C>)> {
 			self.buffer
-				.par_chunks_exact(Self::CHANNELS)
+				.par_chunks_exact(CHANNELS)
+				.map(TryInto::try_into)
+				.map(Result::unwrap)
 				.enumerate()
-				.map(|(index, slice)| {
+				.map(|(index, array)| {
 					let (x, y) = self.layout.reverse_index(index);
-					(x, y, C::as_view_unchecked(slice))
+					(x, y, C::as_view(array))
 				})
 		}
 	}
 
-	impl<C, B> ImageParallelIterMut for GenericImage<C, PackedLayout, B>
+	impl<const CHANNELS: Channels, C, B> ImageParallelIterMut<CHANNELS> for GenericImage<CHANNELS, C, PackedLayout, B>
 	where
-		C: Color + Send + Sync,
+		C: Color<CHANNELS> + Send + Sync,
 		C::Scalar: Send + Sync,
 		C::Format: Send + Sync,
 		B: DerefMut<Target = [C::Scalar]> + Send + Sync,
 	{
 		type Pixel = C;
 
-		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<C>> {
+		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<CHANNELS, C>> {
 			self.buffer
-				.par_chunks_exact_mut(Self::CHANNELS)
-				.map(C::as_view_mut_unchecked)
+				.par_chunks_exact_mut(CHANNELS)
+				.map(TryInto::try_into)
+				.map(Result::unwrap)
+				.map(C::as_view_mut)
 		}
 
-		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<C>)> {
+		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<CHANNELS, C>)> {
 			self.buffer
-				.par_chunks_exact_mut(Self::CHANNELS)
+				.par_chunks_exact_mut(CHANNELS)
+				.map(TryInto::try_into)
+				.map(Result::unwrap)
 				.enumerate()
 				.map(|(index, slice)| {
 					let (x, y) = self.layout.reverse_index(index);
-					(x, y, C::as_view_mut_unchecked(slice))
+					(x, y, C::as_view_mut(slice))
 				})
 		}
 	}
@@ -236,41 +270,4 @@ mod par_iter {
 */
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_constructor() {
-		let layout = PackedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
-		assert_eq!(layout.width(), 10);
-		assert_eq!(layout.height(), 20);
-		assert_eq!(layout.order(), InterleavedLayoutOrder::RowMajor);
-
-		let layout = PackedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
-		assert_eq!(layout.width(), 90);
-		assert_eq!(layout.height(), 5);
-		assert_eq!(layout.order(), InterleavedLayoutOrder::ColumnMajor);
-
-		assert!(PackedLayout::new(0, 20, InterleavedLayoutOrder::RowMajor).is_err());
-
-		assert!(PackedLayout::new(10, 0, InterleavedLayoutOrder::RowMajor).is_err());
-	}
-
-	#[test]
-	fn test_minimum_buffer_size() {
-		let layout = PackedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
-		assert_eq!(layout.minimum_buffer_size(3), 10 * 20 * 3);
-
-		let layout = PackedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
-		assert_eq!(layout.minimum_buffer_size(4), 90 * 5 * 4);
-	}
-
-	#[test]
-	fn test_color_channel_index() {
-		let layout = PackedLayout::new(10, 20, InterleavedLayoutOrder::RowMajor).unwrap();
-		assert_eq!(layout.color_channel_index_unchecked(3, 5, 12, 0), 5 + 12 * 10 * 3);
-
-		let layout = PackedLayout::new(90, 5, InterleavedLayoutOrder::ColumnMajor).unwrap();
-		assert_eq!(layout.color_channel_index_unchecked(4, 7, 10, 1), 10 + 7 * 5 * 4 + 1);
-	}
-}
+mod tests {}

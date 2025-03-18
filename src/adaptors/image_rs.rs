@@ -71,7 +71,7 @@ impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::Rgba<S> {
 impl<Scalar: image::Primitive + ScalarPrimitive> Color for image::Luma<Scalar> {
 	type Scalar = Scalar;
 	type Format = formats::Y;
-	type Space = spaces::CieXYZD65;
+	type Space = spaces::CieXYZ;
 }
 
 impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::Luma<S> {
@@ -102,7 +102,7 @@ impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::Luma<S> {
 impl<Scalar: image::Primitive + ScalarPrimitive> Color for image::LumaA<Scalar> {
 	type Scalar = Scalar;
 	type Format = formats::YA;
-	type Space = spaces::CieXYZD65;
+	type Space = spaces::CieXYZ;
 }
 
 impl<S: image::Primitive + ScalarPrimitive> ColorComponents for image::LumaA<S> {

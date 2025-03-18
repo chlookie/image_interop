@@ -38,7 +38,6 @@ impl ScalarPrimitive for half::f16 {}
 */
 
 pub type Channels = usize;
-pub const MAX_CHANNELS: Channels = 256;
 
 /// A color channel.
 pub trait ColorComponent {}
@@ -47,9 +46,7 @@ pub trait ColorComponent {}
 pub trait ColorSpace {}
 
 /// A color format.
-pub trait ColorFormat {
-	const CHANNELS: Channels;
-}
+pub trait ColorFormat<const CHANNELS: Channels> {}
 
 /*
 --------------------------------------------------------------------------------
@@ -57,90 +54,38 @@ pub trait ColorFormat {
 --------------------------------------------------------------------------------
 */
 
-macro_rules! check_channels {
-	($id:ident, $channels:expr) => {
-		ensure!(
-			$id.len() == $channels,
-			"Given slice doesn't match the number of channels for the color type"
-		);
-	};
-}
-
 /// A generalized color.
-pub trait Color: Copy + Clone {
+pub trait Color<const CHANNELS: Channels>: Copy + Clone {
 	/// The scalar type that is used to store each channel in this color.
 	type Scalar: ScalarPrimitive;
 
 	/// The format that describes the color channels and their order in this color. For example (Red, Green, Blue, Alpha) or (Hue, Saturation, Value)
-	type Format: ColorFormat;
+	type Format: ColorFormat<CHANNELS>;
 
 	/// The color space in which the color is defined in. Colors in the same color space can be trivially converted to- and from by interchanging their respective components as defined in the color [`Color::Format`].
 	type Space: ColorSpace;
 
-	/// The number of channels in this color.
-	const CHANNELS: Channels = Self::Format::CHANNELS;
+	/// Returns a new pixel from an array.
+	fn from_array(array: [Self::Scalar; CHANNELS]) -> Self;
+
+	/// Returns this pixel as an array.
+	fn to_array(&self) -> [Self::Scalar; CHANNELS];
 
 	/// A view into a slice of contiguous color channels.
-	fn as_view(slice: &[Self::Scalar]) -> Result<PixelView<Self>> {
+	fn as_view(slice: &[Self::Scalar; CHANNELS]) -> PixelView<CHANNELS, Self> {
 		PixelView::new(slice)
 	}
 
 	/// A mutable view into a slice of contiguous color channels.
-	fn as_view_mut(slice: &mut [Self::Scalar]) -> Result<PixelViewMut<Self>> {
+	fn as_view_mut(slice: &mut [Self::Scalar; CHANNELS]) -> PixelViewMut<CHANNELS, Self> {
 		PixelViewMut::new(slice)
 	}
-
-	/// A view into a slice of contiguous color channels.
-	///
-	/// May panic if the slice is of the wrong length.
-	fn as_view_unchecked(slice: &[Self::Scalar]) -> PixelView<Self> {
-		PixelView::new_unchecked(slice)
-	}
-
-	/// A mutable view into a slice of contiguous color channels.
-	///
-	/// May panic if the slice is of the wrong length.
-	fn as_view_mut_unchecked(slice: &mut [Self::Scalar]) -> PixelViewMut<Self> {
-		PixelViewMut::new_unchecked(slice)
-	}
-}
-
-pub trait ColorComponents: Color {
-	/// The tuple type that represents the channels of this color.
-	type Tuple;
-
-	/// The array type that represents the channels of this color.
-	type Array: AsRef<[Self::Scalar]>;
-
-	/// Returns a new pixel from a slice.
-	fn from_slice(slice: &[Self::Scalar]) -> Result<Self> {
-		check_channels!(slice, Self::CHANNELS);
-
-		Ok(Self::from_slice_unchecked(slice))
-	}
-
-	/// Returns a new pixel from a slice.
-	///
-	/// May panic if the slice is of the wrong length.
-	fn from_slice_unchecked(slice: &[Self::Scalar]) -> Self;
-
-	/// Returns a new pixel from a tuple.
-	fn from_tuple(tuple: Self::Tuple) -> Self;
-
-	/// Returns this pixel as a tuple.
-	fn to_tuple(&self) -> Self::Tuple;
-
-	/// Returns a new pixel from an array.
-	fn from_array(array: Self::Array) -> Self;
-
-	/// Returns this pixel as an array.
-	fn to_array(&self) -> Self::Array;
 }
 
 /// A color format that can be converted to and from another format.
-pub trait ConvertFormatFrom<From, Scalar, const CHANNELS: Channels> {
-	/// Convert a slice of color channels from one format to another.
-	fn convert_slice(slice: &[Scalar]) -> [Scalar; CHANNELS];
+pub trait ConvertFormatFrom<const CHANNELS: Channels, From, Scalar> {
+	/// Convert an array of color channels from one format to another.
+	fn convert_array(array: [Scalar; CHANNELS]) -> [Scalar; CHANNELS];
 }
 
 /// A color that can be converted to and from another color.
@@ -149,18 +94,18 @@ pub trait ConvertColorFrom<From> {
 	fn color_from(color: From) -> Self;
 }
 
-impl<From, To, Scalar, Space, FormatTo, const CHANNELS: Channels> ConvertColorFrom<From> for To
-where
-	From: Color<Scalar = Scalar, Space = Space> + ColorComponents,
-	To: Color<Scalar = Scalar, Space = Space, Format = FormatTo> + ColorComponents<Array = [Scalar; CHANNELS]>,
-	FormatTo: ConvertFormatFrom<From::Format, Scalar, { CHANNELS }>,
-{
-	fn color_from(color: From) -> Self {
-		let array_in = color.to_array();
-		let array_out = To::Format::convert_slice(array_in.as_ref());
-		To::from_array(array_out)
-	}
-}
+// impl<const CHANNELS: Channels, From, To, Scalar, Space, FormatTo> ConvertColorFrom<From> for To
+// where
+// 	From: Color<CHANNELS, Scalar = Scalar, Space = Space> + ColorComponents<CHANNELS>,
+// 	To: Color<CHANNELS, Scalar = Scalar, Space = Space, Format = FormatTo> + ColorComponents<CHANNELS>,
+// 	FormatTo: ConvertFormatFrom<CHANNELS, From::Format, Scalar>,
+// {
+// 	fn color_from(color: From) -> Self {
+// 		let array_in = color.to_array();
+// 		let array_out = To::Format::convert_array(array_in);
+// 		To::from_array(array_out)
+// 	}
+// }
 
 /*
 --------------------------------------------------------------------------------
@@ -170,6 +115,9 @@ where
 
 /// Describes a generic image layout.
 pub trait ImageLayout: Copy + Clone {
+	/// The number of color channels in the image.
+	fn channels(&self) -> Channels;
+
 	/// The width of the image.
 	fn width(&self) -> u32;
 
@@ -177,22 +125,22 @@ pub trait ImageLayout: Copy + Clone {
 	fn height(&self) -> u32;
 
 	/// The minimum buffer size required to store the image.
-	fn minimum_buffer_size(&self, channels: Channels) -> usize;
+	fn minimum_buffer_size(&self) -> usize;
 
 	/// Get the index of a color channel at a given x, y coordinate.
 	///
 	/// May panic if the channel index or x, y coordinates are out of bounds.
-	fn color_channel_index_unchecked(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> usize;
+	fn component_index_unchecked(&self, x: u32, y: u32, channel: Channels) -> usize;
 
 	/// Get the index of a color channel at a given x, y coordinate.
-	fn color_channel_index(&self, channels: Channels, x: u32, y: u32, channel: Channels) -> Result<usize> {
-		ensure!(channel < channels, "Channel index out of bounds");
+	fn component_index(&self, x: u32, y: u32, channel: Channels) -> Result<usize> {
+		ensure!(channel < self.channels(), "Channel index out of bounds");
 		ensure!(
 			x < self.width() && y < self.height(),
 			"Pixel x y coordinates out of bounds"
 		);
 
-		Ok(self.color_channel_index_unchecked(channels, x, y, channel))
+		Ok(self.component_index_unchecked(x, y, channel))
 	}
 }
 
@@ -201,35 +149,35 @@ pub trait InterleavedImageLayout: ImageLayout {
 	/// Get the index of a pixel at a given x, y coordinate.
 	///
 	/// May panic if the x, y coordinates are out of bounds.
-	fn pixel_index_unchecked(&self, channels: Channels, x: u32, y: u32) -> usize;
+	fn pixel_index_unchecked(&self, x: u32, y: u32) -> usize;
 
 	/// Get the index of a pixel at a given x, y coordinate.
-	fn pixel_index(&self, channels: Channels, x: u32, y: u32) -> Result<usize> {
+	fn pixel_index(&self, x: u32, y: u32) -> Result<usize> {
 		ensure!(
 			x < self.width() && y < self.height(),
 			"Pixel x y coordinates out of bounds"
 		);
 
-		Ok(self.pixel_index_unchecked(channels, x, y))
+		Ok(self.pixel_index_unchecked(x, y))
 	}
 
 	/// Get the range of indices for a pixel at a given x, y coordinate.
 	///
 	/// May panic if the x, y coordinates are out of bounds.
-	fn pixel_range_unchecked(&self, channels: Channels, x: u32, y: u32) -> Range<usize> {
-		let start = self.pixel_index_unchecked(channels, x, y);
-		let end = start + channels;
+	fn pixel_range_unchecked(&self, x: u32, y: u32) -> Range<usize> {
+		let start = self.pixel_index_unchecked(x, y);
+		let end = start + self.channels();
 		start..end
 	}
 
 	/// Get the range of indices for a pixel at a given x, y coordinate.
-	fn pixel_range(&self, channels: Channels, x: u32, y: u32) -> Result<Range<usize>> {
+	fn pixel_range(&self, x: u32, y: u32) -> Result<Range<usize>> {
 		ensure!(
 			x < self.width() && y < self.height(),
 			"Pixel x y coordinates out of bounds"
 		);
 
-		Ok(self.pixel_range_unchecked(channels, x, y))
+		Ok(self.pixel_range_unchecked(x, y))
 	}
 
 	/// Get the layout storage order.
@@ -253,79 +201,54 @@ pub trait InterleavedImageLayout: ImageLayout {
 */
 
 /// A view into a slice of contiguous color channels.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct PixelView<'a, C: Color> {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct PixelView<'a, const CHANNELS: Channels, C: Color<CHANNELS>> {
 	/// The slice of color channels.
-	pub slice: &'a [C::Scalar],
+	pub slice: &'a [C::Scalar; CHANNELS],
 
 	_format: PhantomData<C::Format>,
 }
 
-impl<'a, C: Color> PixelView<'a, C> {
+impl<'a, const CHANNELS: Channels, C: Color<CHANNELS>> PixelView<'a, CHANNELS, C> {
 	/// Create a new view from a slice.
-	pub fn new(slice: &'a [C::Scalar]) -> Result<Self> {
-		check_channels!(slice, C::CHANNELS);
-		Ok(Self::new_unchecked(slice))
-	}
-
-	/// Create a new view from a slice.
-	///
-	/// May panic if the slice is of the wrong length.
-	pub fn new_unchecked(slice: &'a [C::Scalar]) -> Self {
-		PixelView {
+	pub fn new(slice: &'a [C::Scalar; CHANNELS]) -> Self {
+		Self {
 			slice,
 			_format: PhantomData,
 		}
 	}
 
 	/// Returns the color of the pixel represented by this view.
-	pub fn as_color(&self) -> C
-	where
-		C: ColorComponents,
-	{
-		C::from_slice_unchecked(self.slice)
+	pub fn as_color(&self) -> C {
+		C::from_array(*self.slice)
 	}
 }
 
 /// A mutable view into a slice of contiguous color channels.
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct PixelViewMut<'a, C: Color> {
+#[derive(Debug, PartialEq, Eq)]
+pub struct PixelViewMut<'a, const CHANNELS: Channels, C: Color<CHANNELS>> {
 	/// The slice of color channels.
-	pub slice: &'a mut [C::Scalar],
+	pub slice: &'a mut [C::Scalar; CHANNELS],
 	_format: PhantomData<C::Format>,
 }
 
-impl<'a, C: Color> PixelViewMut<'a, C> {
+impl<'a, const CHANNELS: Channels, C: Color<CHANNELS>> PixelViewMut<'a, CHANNELS, C> {
 	/// Create a new mutable view from a slice.
-	pub fn new(slice: &'a mut [C::Scalar]) -> Result<Self> {
-		check_channels!(slice, C::Format::CHANNELS);
-		Ok(Self::new_unchecked(slice))
-	}
-
-	/// Create a new mutable view from a slice.
-	///
-	/// May panic if the slice is of the wrong length.
-	pub fn new_unchecked(slice: &'a mut [C::Scalar]) -> Self {
-		PixelViewMut {
+	pub fn new(slice: &'a mut [C::Scalar; CHANNELS]) -> Self {
+		Self {
 			slice,
 			_format: PhantomData,
 		}
 	}
 
 	/// Returns the color of the pixel represented by this view.
-	pub fn as_color(&self) -> C
-	where
-		C: ColorComponents,
-	{
-		C::from_slice_unchecked(self.slice)
+	pub fn as_color(&self) -> C {
+		C::from_array(*self.slice)
 	}
 
 	/// Set the color of the pixel represented by this view.
-	pub fn set_color(&mut self, color: C)
-	where
-		C: ColorComponents,
-	{
-		self.slice.copy_from_slice(color.to_array().as_ref());
+	pub fn set_color(&mut self, color: C) {
+		*self.slice = color.to_array();
 	}
 }
 
@@ -336,16 +259,13 @@ impl<'a, C: Color> PixelViewMut<'a, C> {
 */
 
 /// Trait to inspect an image.
-pub trait ImageView {
+pub trait ImageView<const CHANNELS: Channels> {
 	/// The type of each pixel in the image.
-	type Pixel: Color;
+	type Pixel: Color<CHANNELS>;
 
-	// The number of channels the image has.
-	const CHANNELS: Channels;
-
-	/// COnvenience mthod that returns the number of channels the image has.
+	/// Convenience mthod that returns the number of channels the image has.
 	fn channels(&self) -> Channels {
-		Self::CHANNELS
+		CHANNELS
 	}
 
 	/// The width and height of this image.
@@ -384,7 +304,7 @@ pub trait ImageView {
 }
 
 /// A trait for manipulating images.
-pub trait ImageViewMut: ImageView {
+pub trait ImageViewMut<const CHANNELS: Channels>: ImageView<CHANNELS> {
 	/// Put a pixel at location (x, y). Indexed from top left.
 	fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) -> Result<()> {
 		ensure!(
@@ -406,7 +326,7 @@ pub trait ImageViewMut: ImageView {
 	/// Both images must have matching sizes.
 	fn copy_from<O>(&mut self, other: &O, x: u32, y: u32) -> Result<()>
 	where
-		O: ImageView<Pixel = Self::Pixel>,
+		O: ImageView<CHANNELS, Pixel = Self::Pixel>,
 	{
 		// Do bounds checking here so we can use the non-bounds-checking functions to copy pixels.
 		ensure!(
@@ -431,27 +351,27 @@ pub trait ImageViewMut: ImageView {
 */
 
 /// Trait for iterating over the pixels of an image.
-pub trait ImageIter {
+pub trait ImageIter<const CHANNELS: Channels> {
 	/// The type of each pixel in the image.
-	type Pixel: Color;
+	type Pixel: Color<CHANNELS>;
 
 	/// Returns an iterator over the pixels of the image.
-	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<Self::Pixel>>;
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<CHANNELS, Self::Pixel>>;
 
 	/// Returns an iterator over the pixels of the image and their respective coordinates.
-	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<Self::Pixel>)>;
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<CHANNELS, Self::Pixel>)>;
 }
 
 /// Trait for mutating the pixels of an image.
-pub trait ImageIterMut {
+pub trait ImageIterMut<const CHANNELS: Channels> {
 	/// The type of each pixel in the image.
-	type Pixel: Color;
+	type Pixel: Color<CHANNELS>;
 
 	/// Returns an iterator over the pixels of the image.
-	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<Self::Pixel>>;
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<CHANNELS, Self::Pixel>>;
 
 	/// Returns an iterator over the pixels of the image and their respective coordinates.
-	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<Self::Pixel>)>;
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<CHANNELS, Self::Pixel>)>;
 }
 
 #[cfg(feature = "rayon")]
@@ -461,27 +381,29 @@ mod par_iter {
 	use super::*;
 
 	/// Trait for iterating over the pixels of an image in parallel using rayon.
-	pub trait ImageParallelIter {
+	pub trait ImageParallelIter<const CHANNELS: Channels> {
 		/// The type of each pixel in the image.
-		type Pixel: Color;
+		type Pixel: Color<CHANNELS>;
 
 		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
-		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<Self::Pixel>>;
+		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<CHANNELS, Self::Pixel>>;
 
 		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
-		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<Self::Pixel>)>;
+		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<CHANNELS, Self::Pixel>)>;
 	}
 
 	/// Trait for mutating the pixels of an image in parallel using rayon.
-	pub trait ImageParallelIterMut {
+	pub trait ImageParallelIterMut<const CHANNELS: Channels> {
 		/// The type of each pixel in the image.
-		type Pixel: Color;
+		type Pixel: Color<CHANNELS>;
 
 		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
-		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<Self::Pixel>>;
+		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<CHANNELS, Self::Pixel>>;
 
 		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
-		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<Self::Pixel>)>;
+		fn par_enumerate_pixels_mut(
+			&mut self,
+		) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<CHANNELS, Self::Pixel>)>;
 	}
 }
 

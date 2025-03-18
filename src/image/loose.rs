@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use anyhow::{Result, ensure};
 
-use crate::{Channels, Color, ColorComponents, ImageLayout, ImageView, ImageViewMut, MAX_CHANNELS};
+use crate::{Channels, Color, ImageLayout, ImageView, ImageViewMut};
 
 use super::{GenericImage, InterleavedLayout, PackedLayout};
 
@@ -53,6 +53,9 @@ impl LooseLayoutOrder {
 /// Describes the layout of a loose-layout image, where the color channels are not necessarily stored contiguously in memory. This is a generalization of the interleaved layout and can be used for planar or other layouts.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct LooseLayout {
+	/// The number of color channels in the image.
+	channels: Channels,
+
 	/// The width of the image.
 	width: u32,
 
@@ -71,8 +74,18 @@ pub struct LooseLayout {
 
 impl LooseLayout {
 	/// Create a new loose layout.
-	pub fn new(width: u32, height: u32, channel_stride: usize, x_stride: usize, y_stride: usize) -> Result<Self> {
+	pub fn new(
+		channels: Channels,
+		width: u32,
+		height: u32,
+		channel_stride: usize,
+		x_stride: usize,
+		y_stride: usize,
+	) -> Result<Self> {
 		// Check that it is well-formed
+		ensure!(channels > 0, "Number of channels cannot be zero");
+		ensure!(width > 0, "Width cannot be zero");
+		ensure!(height > 0, "Height cannot be zero");
 		ensure!(channel_stride > 0, "Channel stride cannot be zero");
 		ensure!(x_stride > 0, "X stride cannot be zero");
 		ensure!(y_stride > 0, "Y stride cannot be zero");
@@ -82,6 +95,7 @@ impl LooseLayout {
 		);
 
 		Ok(Self {
+			channels,
 			width,
 			height,
 			channel_stride,
@@ -119,6 +133,10 @@ impl LooseLayout {
 }
 
 impl ImageLayout for LooseLayout {
+	fn channels(&self) -> Channels {
+		self.channels
+	}
+
 	fn width(&self) -> u32 {
 		self.width
 	}
@@ -127,13 +145,13 @@ impl ImageLayout for LooseLayout {
 		self.height
 	}
 
-	fn minimum_buffer_size(&self, channels: Channels) -> usize {
-		(self.channel_stride * channels as usize)
+	fn minimum_buffer_size(&self) -> usize {
+		(self.channel_stride * self.channels as usize)
 			.max(self.x_stride * self.height as usize)
 			.max(self.y_stride * self.width as usize)
 	}
 
-	fn color_channel_index_unchecked(&self, _channels: Channels, x: u32, y: u32, channel: Channels) -> usize {
+	fn component_index_unchecked(&self, x: u32, y: u32, channel: Channels) -> usize {
 		channel * self.channel_stride + x as usize * self.x_stride + y as usize * self.y_stride
 	}
 }
@@ -141,6 +159,7 @@ impl ImageLayout for LooseLayout {
 impl From<InterleavedLayout> for LooseLayout {
 	fn from(value: InterleavedLayout) -> Self {
 		Self {
+			channels: value.channels(),
 			width: value.width(),
 			height: value.height(),
 			channel_stride: 1,
@@ -162,46 +181,40 @@ impl From<PackedLayout> for LooseLayout {
 --------------------------------------------------------------------------------
 */
 
-impl<C, B> ImageView for GenericImage<C, LooseLayout, B>
+impl<const CHANNELS: Channels, C, B> ImageView<CHANNELS> for GenericImage<CHANNELS, C, LooseLayout, B>
 where
-	C: Color + ColorComponents,
+	C: Color<CHANNELS>,
 	B: Deref<Target = [C::Scalar]>,
 {
 	type Pixel = C;
-
-	const CHANNELS: Channels = Self::CHANNELS;
 
 	fn dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
 	}
 
 	fn get_pixel_unchecked(&self, x: u32, y: u32) -> Self::Pixel {
-		let mut buffer = [Default::default(); MAX_CHANNELS];
+		let mut buffer = [Default::default(); CHANNELS];
 
-		buffer
-			.iter_mut()
-			.enumerate()
-			.take(Self::CHANNELS)
-			.for_each(|(channel, buf)| {
-				let index = self.layout.color_channel_index_unchecked(Self::CHANNELS, x, y, channel);
-				let sample = (*self.buffer)[index];
-				*buf = sample;
-			});
+		buffer.iter_mut().enumerate().for_each(|(channel, buf)| {
+			let index = self.layout.component_index_unchecked(x, y, channel);
+			let sample = (*self.buffer)[index];
+			*buf = sample;
+		});
 
-		C::from_slice_unchecked(&buffer[..Self::CHANNELS])
+		C::from_array(buffer)
 	}
 }
 
-impl<C, B> ImageViewMut for GenericImage<C, LooseLayout, B>
+impl<const CHANNELS: Channels, C, B> ImageViewMut<CHANNELS> for GenericImage<CHANNELS, C, LooseLayout, B>
 where
-	C: Color + ColorComponents,
+	C: Color<CHANNELS>,
 	B: DerefMut<Target = [C::Scalar]>,
 {
 	fn put_pixel_unchecked(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
 		// For each channel of the pixel, individually set the sample into the
 		// underlying buffer
 		for (channel, sample) in pixel.to_array().as_ref().iter().enumerate() {
-			let index = self.layout.color_channel_index_unchecked(Self::CHANNELS, x, y, channel);
+			let index = self.layout.component_index_unchecked(x, y, channel);
 			(*self.buffer)[index] = *sample;
 		}
 	}

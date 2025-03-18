@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use anyhow::{Ok, Result, ensure};
 use num_traits::FromBytes;
 
-use crate::{AssumedLinear, AssumedSrgb, Channels, Color, ColorComponents, ConvertColorFrom, ImageLayout, spaces};
+use crate::{AssumedLinear, AssumedSrgb, Channels, Color, ConvertColorFrom, ImageLayout, spaces};
 
 /*
 --------------------------------------------------------------------------------
@@ -27,29 +27,33 @@ pub use packed::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct GenericImage<C: Color, Layout: ImageLayout = PackedLayout, Buffer = Vec<<C as Color>::Scalar>> {
+pub struct GenericImage<const CHANNELS: Channels, C, L = PackedLayout, B = Vec<<C as Color<CHANNELS>>::Scalar>>
+where
+	C: Color<CHANNELS>,
+	L: ImageLayout,
+{
 	/// The backing buffer of the image, which contains the actual samples.
-	pub(crate) buffer: Buffer,
+	pub(crate) buffer: B,
 
 	/// The layout of the image, which dictates the size of the image and how to locate pixels in the buffer.
-	pub(crate) layout: Layout,
+	pub(crate) layout: L,
 
 	/// Some PhatomData for our generic types
 	_color: PhantomData<C>,
 }
 
-impl<C: Color, L: ImageLayout> GenericImage<C, L, Vec<C::Scalar>> {
+impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout> GenericImage<CHANNELS, C, L, Vec<C::Scalar>> {
 	/// Creates a new [`Image`] with a simple contiguous [`Vec`] as a buffer.
 	pub fn new(width: u32, height: u32) -> Result<Self>
 	where
 		PackedLayout: Into<L>,
 	{
-		let layout: L = PackedLayout::new(width, height, InterleavedLayoutOrder::RowMajor)?.into();
-		let buffer = vec![C::Scalar::default(); Self::CHANNELS * width as usize * height as usize];
+		let layout: L = PackedLayout::new(CHANNELS, width, height, InterleavedLayoutOrder::RowMajor)?.into();
+		let buffer = vec![C::Scalar::default(); CHANNELS * width as usize * height as usize];
 
 		// Sanity check that the layout/buffer dimensions are correct
 		debug_assert!(
-			buffer.len() == layout.minimum_buffer_size(Self::CHANNELS),
+			buffer.len() == layout.minimum_buffer_size(),
 			"The auto-generated buffer is not the exact size for the given layout, this is a bug."
 		);
 
@@ -76,17 +80,21 @@ impl<C: Color, L: ImageLayout> GenericImage<C, L, Vec<C::Scalar>> {
 	}
 }
 
-impl<C: Color, L: ImageLayout, B> GenericImage<C, L, B> {
-	pub const CHANNELS: Channels = C::CHANNELS;
-
+impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericImage<CHANNELS, C, L, B> {
 	/// Creates a new [`Image`] instance given a backing buffer and an [`ImageLayout`].
 	pub fn from_buffer(buffer: B, layout: L) -> Result<Self>
 	where
 		B: Deref<Target = [C::Scalar]>,
 	{
+		// Check that the layout has the correct number of channels
+		ensure!(
+			layout.channels() == CHANNELS,
+			"The given layout has the wrong number of channels for the given color type."
+		);
+
 		// Check that the layout/buffer dimensions are correct
 		ensure!(
-			buffer.len() >= layout.minimum_buffer_size(Self::CHANNELS),
+			buffer.len() >= layout.minimum_buffer_size(),
 			"The given buffer is too small to fit the entire image as dictated by the given layout."
 		);
 
@@ -95,6 +103,29 @@ impl<C: Color, L: ImageLayout, B> GenericImage<C, L, B> {
 			layout,
 			_color: PhantomData,
 		})
+	}
+
+	pub fn layout(&self) -> L {
+		self.layout
+	}
+
+	pub fn buffer(&self) -> &B {
+		&self.buffer
+	}
+
+	pub fn into_buffer(self) -> B {
+		self.buffer
+	}
+
+	pub fn transmute_color<C2>(self) -> GenericImage<CHANNELS, C2, L, B>
+	where
+		C2: Color<CHANNELS, Scalar = C::Scalar>,
+	{
+		GenericImage {
+			buffer: self.buffer,
+			layout: self.layout,
+			_color: PhantomData,
+		}
 	}
 
 	#[cfg(not(feature = "rayon"))]
@@ -121,11 +152,10 @@ impl<C: Color, L: ImageLayout, B> GenericImage<C, L, B> {
 
 	/// TODO: Needs benchmarking to see if it's actually a good idea to use rayon here
 	#[cfg(feature = "rayon")]
-	pub fn convert_color<C2>(mut self) -> GenericImage<C2, L, B>
+	pub fn convert_color<C2>(mut self) -> GenericImage<CHANNELS, C2, L, B>
 	where
-		C: ColorComponents,
-		C2: Color<Scalar = C::Scalar> + ColorComponents + ConvertColorFrom<C>,
-		Self: crate::ImageParallelIterMut<Pixel = C>,
+		C2: Color<CHANNELS, Scalar = C::Scalar> + ConvertColorFrom<C>,
+		Self: crate::ImageParallelIterMut<CHANNELS, Pixel = C>,
 	{
 		use crate::ImageParallelIterMut;
 		use rayon::iter::ParallelIterator;
@@ -145,37 +175,17 @@ impl<C: Color, L: ImageLayout, B> GenericImage<C, L, B> {
 		}
 	}
 
-	pub fn layout(&self) -> L {
-		self.layout
-	}
-
-	pub fn buffer(&self) -> &B {
-		&self.buffer
-	}
-
-	pub fn into_buffer(self) -> B {
-		self.buffer
-	}
-
-	pub fn assume_linear_rgb(self) -> GenericImage<AssumedLinear<C>, L, B>
+	pub fn assume_linear_rgb(self) -> GenericImage<CHANNELS, AssumedLinear<C>, L, B>
 	where
-		C: Color<Space = spaces::UnknownRGB>,
+		C: Color<CHANNELS, Space = spaces::UnknownRGB>,
 	{
-		GenericImage {
-			buffer: self.buffer,
-			layout: self.layout,
-			_color: PhantomData,
-		}
+		self.transmute_color()
 	}
 
-	pub fn assume_srgb(self) -> GenericImage<AssumedSrgb<C>, L, B>
+	pub fn assume_srgb(self) -> GenericImage<CHANNELS, AssumedSrgb<C>, L, B>
 	where
-		C: Color<Space = spaces::UnknownRGB>,
+		C: Color<CHANNELS, Space = spaces::UnknownRGB>,
 	{
-		GenericImage {
-			buffer: self.buffer,
-			layout: self.layout,
-			_color: PhantomData,
-		}
+		self.transmute_color()
 	}
 }
