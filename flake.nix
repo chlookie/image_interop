@@ -41,7 +41,7 @@
         # Define the Rust toolchain by reading rust-toolchain.toml
         toolchain = fenix.packages.${system}.fromToolchainFile {
           dir = ./.;
-          sha256 = "sha256-AJ6LX/Q/Er9kS15bn9iflkUwcgYqRQxiOIL2ToVAXaU=";
+          sha256 = "sha256-KUm16pHj+cRedf8vxs/Hd2YWxpOrWZ7UOrwhILdSJBU=";
         };
 
         naersk' = pkgs.callPackage naersk {
