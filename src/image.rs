@@ -138,7 +138,7 @@ impl<const CHANNELS: Channels, C: Color<CHANNELS>, L: ImageLayout, B> GenericIma
 		}
 	}
 
-	/// Shrink the number of channels in the image, and transmutes the color type.
+	/// Shrink the number of channels in the image, and transmute the color type.
 	pub fn shrink_channels<const DST_CHANNELS: Channels, DstColor>(
 		self,
 	) -> Result<GenericImage<DST_CHANNELS, DstColor, LooseLayout, B>>

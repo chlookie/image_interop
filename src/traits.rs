@@ -2,6 +2,8 @@ use std::{marker::PhantomData, ops::Range};
 
 use anyhow::{Result, ensure};
 
+use crate::InterleavedLayoutOrder;
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -369,6 +371,10 @@ pub trait ImageViewMut<const CHANNELS: Channels>: ImageView<CHANNELS> {
 	}
 }
 
+pub trait ConvertImage<T> {
+	fn convert_image(self) -> T;
+}
+
 /*
 --------------------------------------------------------------------------------
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -399,40 +405,33 @@ pub trait ImageIterMut<const CHANNELS: Channels> {
 	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<CHANNELS, Self::Pixel>)>;
 }
 
+/// Trait for iterating over the pixels of an image in parallel using rayon.
 #[cfg(feature = "rayon")]
-mod par_iter {
-	use rayon::iter::ParallelIterator;
+pub trait ImageParallelIter<const CHANNELS: Channels> {
+	/// The type of each pixel in the image.
+	type Pixel: Color<CHANNELS>;
 
-	use super::*;
+	/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
+	fn par_pixels(&self) -> impl rayon::iter::ParallelIterator<Item = PixelView<CHANNELS, Self::Pixel>>;
 
-	/// Trait for iterating over the pixels of an image in parallel using rayon.
-	pub trait ImageParallelIter<const CHANNELS: Channels> {
-		/// The type of each pixel in the image.
-		type Pixel: Color<CHANNELS>;
-
-		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
-		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<CHANNELS, Self::Pixel>>;
-
-		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
-		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<CHANNELS, Self::Pixel>)>;
-	}
-
-	/// Trait for mutating the pixels of an image in parallel using rayon.
-	pub trait ImageParallelIterMut<const CHANNELS: Channels> {
-		/// The type of each pixel in the image.
-		type Pixel: Color<CHANNELS>;
-
-		/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
-		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<CHANNELS, Self::Pixel>>;
-
-		/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
-		fn par_enumerate_pixels_mut(
-			&mut self,
-		) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<CHANNELS, Self::Pixel>)>;
-	}
+	/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
+	fn par_enumerate_pixels(
+		&self,
+	) -> impl rayon::iter::ParallelIterator<Item = (u32, u32, PixelView<CHANNELS, Self::Pixel>)>;
 }
 
+/// Trait for mutating the pixels of an image in parallel using rayon.
 #[cfg(feature = "rayon")]
-pub use par_iter::*;
+pub trait ImageParallelIterMut<const CHANNELS: Channels> {
+	/// The type of each pixel in the image.
+	type Pixel: Color<CHANNELS>;
 
-use crate::InterleavedLayoutOrder;
+	/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
+	fn par_iter_pixels_mut(&mut self)
+	-> impl rayon::iter::ParallelIterator<Item = PixelViewMut<CHANNELS, Self::Pixel>>;
+
+	/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
+	fn par_enumerate_pixels_mut(
+		&mut self,
+	) -> impl rayon::iter::ParallelIterator<Item = (u32, u32, PixelViewMut<CHANNELS, Self::Pixel>)>;
+}

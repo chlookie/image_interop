@@ -1,4 +1,4 @@
-use crate::{Color, ScalarPrimitive, formats, spaces};
+use crate::{Color, ConvertImage, GenericImage, InterleavedImageLayout, ScalarPrimitive, formats, spaces};
 
 /*
 --------------------------------------------------------------------------------
@@ -17,6 +17,17 @@ impl<Scalar: image::Primitive + ScalarPrimitive> Color<3> for image::Rgb<Scalar>
 
 	fn to_array(&self) -> [Self::Scalar; 3] {
 		self.0
+	}
+}
+
+impl<S, B, L> ConvertImage<GenericImage<3, image::Rgb<S>, L, B>> for image::ImageBuffer<image::Rgb<S>, Vec<S>>
+where
+	image::Rgb<S>: image::Pixel,
+	S: image::Primitive + ScalarPrimitive,
+	L: InterleavedImageLayout,
+{
+	fn convert_image(self) -> GenericImage<3, image::Rgb<S>, L, B> {
+		GenericImage::from_buffer(self.into_vec(), layout)
 	}
 }
 
