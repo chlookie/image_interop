@@ -74,12 +74,12 @@ pub trait Color<const CHANNELS: Channels>: Copy + Clone {
 	fn to_array(&self) -> [Self::Scalar; CHANNELS];
 
 	/// A view into a slice of contiguous color channels.
-	fn as_view(slice: &[Self::Scalar; CHANNELS]) -> PixelView<CHANNELS, Self> {
+	fn as_view(slice: &[Self::Scalar; CHANNELS]) -> PixelView<'_, CHANNELS, Self> {
 		PixelView::new(slice)
 	}
 
 	/// A mutable view into a slice of contiguous color channels.
-	fn as_view_mut(slice: &mut [Self::Scalar; CHANNELS]) -> PixelViewMut<CHANNELS, Self> {
+	fn as_view_mut(slice: &mut [Self::Scalar; CHANNELS]) -> PixelViewMut<'_, CHANNELS, Self> {
 		PixelViewMut::new(slice)
 	}
 }
@@ -387,10 +387,10 @@ pub trait ImageIter<const CHANNELS: Channels> {
 	type Pixel: Color<CHANNELS>;
 
 	/// Returns an iterator over the pixels of the image.
-	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<CHANNELS, Self::Pixel>>;
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<'_, CHANNELS, Self::Pixel>>;
 
 	/// Returns an iterator over the pixels of the image and their respective coordinates.
-	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<CHANNELS, Self::Pixel>)>;
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<'_, CHANNELS, Self::Pixel>)>;
 }
 
 /// Trait for mutating the pixels of an image.
@@ -399,10 +399,10 @@ pub trait ImageIterMut<const CHANNELS: Channels> {
 	type Pixel: Color<CHANNELS>;
 
 	/// Returns an iterator over the pixels of the image.
-	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<CHANNELS, Self::Pixel>>;
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<'_, CHANNELS, Self::Pixel>>;
 
 	/// Returns an iterator over the pixels of the image and their respective coordinates.
-	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<CHANNELS, Self::Pixel>)>;
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<'_, CHANNELS, Self::Pixel>)>;
 }
 
 /// Trait for iterating over the pixels of an image in parallel using rayon.
@@ -412,12 +412,12 @@ pub trait ImageParallelIter<const CHANNELS: Channels> {
 	type Pixel: Color<CHANNELS>;
 
 	/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
-	fn par_pixels(&self) -> impl rayon::iter::ParallelIterator<Item = PixelView<CHANNELS, Self::Pixel>>;
+	fn par_pixels(&self) -> impl rayon::iter::ParallelIterator<Item = PixelView<'_, CHANNELS, Self::Pixel>>;
 
 	/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 	fn par_enumerate_pixels(
 		&self,
-	) -> impl rayon::iter::ParallelIterator<Item = (u32, u32, PixelView<CHANNELS, Self::Pixel>)>;
+	) -> impl rayon::iter::ParallelIterator<Item = (u32, u32, PixelView<'_, CHANNELS, Self::Pixel>)>;
 }
 
 /// Trait for mutating the pixels of an image in parallel using rayon.
@@ -428,10 +428,10 @@ pub trait ImageParallelIterMut<const CHANNELS: Channels> {
 
 	/// Returns a parallel iterator over the pixels of the image, usable with `rayon`.
 	fn par_iter_pixels_mut(&mut self)
-	-> impl rayon::iter::ParallelIterator<Item = PixelViewMut<CHANNELS, Self::Pixel>>;
+	-> impl rayon::iter::ParallelIterator<Item = PixelViewMut<'_, CHANNELS, Self::Pixel>>;
 
 	/// Returns a parallel iterator over the pixels of the image and their respective coordinates, usable with `rayon`.
 	fn par_enumerate_pixels_mut(
 		&mut self,
-	) -> impl rayon::iter::ParallelIterator<Item = (u32, u32, PixelViewMut<CHANNELS, Self::Pixel>)>;
+	) -> impl rayon::iter::ParallelIterator<Item = (u32, u32, PixelViewMut<'_, CHANNELS, Self::Pixel>)>;
 }

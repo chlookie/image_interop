@@ -248,7 +248,7 @@ where
 {
 	type Pixel = C;
 
-	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<CHANNELS, C>> {
+	fn iter_pixels(&self) -> impl Iterator<Item = PixelView<'_, CHANNELS, C>> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -263,7 +263,7 @@ where
 		})
 	}
 
-	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<CHANNELS, C>)> {
+	fn enumerate_pixels(&self) -> impl Iterator<Item = (u32, u32, PixelView<'_, CHANNELS, C>)> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -299,7 +299,7 @@ where
 {
 	type Pixel = C;
 
-	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<CHANNELS, C>> {
+	fn iter_pixels_mut(&mut self) -> impl Iterator<Item = PixelViewMut<'_, CHANNELS, C>> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -316,7 +316,7 @@ where
 			})
 	}
 
-	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<CHANNELS, C>)> {
+	fn enumerate_pixels_mut(&mut self) -> impl Iterator<Item = (u32, u32, PixelViewMut<'_, CHANNELS, C>)> {
 		let layout = self.layout;
 		let (major_stride, minor_stride) = layout.major_minor_strides();
 		let (_, minor_length) = layout.major_minor_sidelengths();
@@ -371,7 +371,7 @@ mod par_iter {
 	{
 		type Pixel = C;
 
-		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<CHANNELS, C>> {
+		fn par_pixels(&self) -> impl ParallelIterator<Item = PixelView<'_, CHANNELS, C>> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
@@ -388,7 +388,7 @@ mod par_iter {
 				})
 		}
 
-		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<CHANNELS, C>)> {
+		fn par_enumerate_pixels(&self) -> impl ParallelIterator<Item = (u32, u32, PixelView<'_, CHANNELS, C>)> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
@@ -426,7 +426,7 @@ mod par_iter {
 	{
 		type Pixel = C;
 
-		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<CHANNELS, C>> {
+		fn par_iter_pixels_mut(&mut self) -> impl ParallelIterator<Item = PixelViewMut<'_, CHANNELS, C>> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
@@ -443,7 +443,7 @@ mod par_iter {
 				})
 		}
 
-		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<CHANNELS, C>)> {
+		fn par_enumerate_pixels_mut(&mut self) -> impl ParallelIterator<Item = (u32, u32, PixelViewMut<'_, CHANNELS, C>)> {
 			let layout = self.layout;
 			let (major_stride, minor_stride) = layout.major_minor_strides();
 			let (_, minor_length) = layout.major_minor_sidelengths();
