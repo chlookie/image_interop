@@ -16,8 +16,8 @@
     };
 
     # Used to generate/get a specific rust toolchain to use with naersk
-    fenix = {
-      url = "github:nix-community/fenix";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -30,19 +30,19 @@
       flake-utils,
       treefmt-nix,
       naersk,
-      fenix,
+      rust-overlay,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
         # Import nixpkgs for the current system
-        pkgs = nixpkgs.legacyPackages.${system};
+        overlays = [ (import rust-overlay) ];
+        pkgs = import nixpkgs {
+          inherit system overlays;
+        };
 
         # Define the Rust toolchain by reading rust-toolchain.toml
-        toolchain = fenix.packages.${system}.fromToolchainFile {
-          dir = ./.;
-          sha256 = "sha256-KUm16pHj+cRedf8vxs/Hd2YWxpOrWZ7UOrwhILdSJBU=";
-        };
+        toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
         naersk' = pkgs.callPackage naersk {
           cargo = toolchain;
